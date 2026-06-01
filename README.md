@@ -112,8 +112,19 @@ Core application:
 
 - `web_app.py` - small Flask entrypoint that creates and runs the web app.
 - `web_worker.py` - subprocess worker used by the web UI for download jobs.
-- `ytdl.py` - core `yt-dlp` download logic, subtitle selection, subtitle cleanup,
-  TXT transcript export, format helpers, and the legacy CLI flow.
+- `ytdl.py` - small compatibility entrypoint that re-exports the core helpers and
+  keeps the legacy CLI command working.
+- `ytdl_core/` - organized core download package.
+  - `downloader.py` - single-video processing, media/subtitle download options,
+    progress tracking, and output stats.
+  - `subtitles.py` - VTT-to-SRT conversion, rolling subtitle cleanup, subtitle
+    file matching, and TXT transcript export.
+  - `captions.py` - manual/automatic caption language selection.
+  - `formats.py` - filename cleanup, playlist URL normalization, quality
+    grouping, and format descriptions.
+  - `speed.py` - concurrent fragment download mode and fallback handling.
+  - `cli.py` and `cli_utils.py` - legacy interactive CLI flow.
+  - `config.py` - shared paths for the core package.
 
 Web package:
 

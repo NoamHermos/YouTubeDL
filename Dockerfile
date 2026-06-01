@@ -18,6 +18,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY ytdl.py web_app.py web_worker.py ./
 COPY youtube_downloader_web ./youtube_downloader_web
+COPY ytdl_core ./ytdl_core
 
 RUN mkdir -p /app/downloads
 
