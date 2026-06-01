@@ -1,0 +1,11 @@
+services:
+  youtube-downloader:
+    build: .
+    container_name: youtube-downloader-web
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./downloads:/app/downloads
+      # Optional: create cookies.txt next to this file, then uncomment this line.
+      # - ./cookies.txt:/app/cookies.txt:ro
+    restart: unless-stopped

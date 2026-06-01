@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>YouTube Downloader</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+</head>
+<body>
+  <main>
+    <header>
+      <div>
+        <h1>YouTube Downloader</h1>
+        <div class="muted">Download MP4, MP3, fixed SRT subtitles, or continuous TXT transcripts.</div>
+      </div>
+      <div class="pill">Downloads: {{ downloads_dir }}</div>
+    </header>
+
+    <section class="panel">
+      <h2>New Job</h2>
+      <form id="job-form">
+        <label>
+          URL
+          <input name="url" type="url" placeholder="https://www.youtube.com/watch?v=..." required>
+        </label>
+
+        <div class="row">
+          <label>
+            Source
+            <select name="source">
+              <option value="single">Single video</option>
+              <option value="playlist">Playlist</option>
+            </select>
+          </label>
+
+          <label>
+            Download type
+            <select name="download_type">
+              <option value="video">MP4 video</option>
+              <option value="audio">MP3 audio</option>
+              <option value="srt">SRT subtitles</option>
+              <option value="txt">TXT subtitles</option>
+            </select>
+          </label>
+        </div>
+
+        <div class="row">
+          <label>
+            Playlist range
+            <input name="range" placeholder="All, or 1-10">
+          </label>
+
+          <label>
+            Workers
+            <select name="workers">
+              <option value="2">2</option>
+              <option value="1">1</option>
+              <option value="4">4</option>
+              <option value="6">6</option>
+              <option value="8">8</option>
+              <option value="12">12</option>
+              <option value="16">16</option>
+            </select>
+          </label>
+        </div>
+
+        <div id="quality-box">
+          <div class="quality-grid">
+            <label>
+              Video quality
+              <select name="format_id" id="format-id">
+                <option value="best">Auto/Max</option>
+              </select>
+            </label>
+            <button class="secondary" type="button" id="load-formats">Load Qualities</button>
+          </div>
+          <div class="muted" id="format-status">Uses Auto/Max until qualities are loaded.</div>
+        </div>
+
+        <label class="checkline" id="with-subtitles-box">
+          <input name="with_subtitles" type="checkbox" checked>
+          Download subtitles too
+        </label>
+
+        <div class="actions">
+          <button type="submit">Start Download</button>
+          <button class="secondary" type="button" id="refresh-files">Refresh Files</button>
+        </div>
+      </form>
+    </section>
+
+    <section class="panel">
+      <div class="statusbar">
+        <div>
+          <h2>Job Log</h2>
+          <div class="muted" id="job-title">No job running yet.</div>
+        </div>
+        <button class="danger" type="button" id="cancel-job" hidden>Cancel</button>
+      </div>
+      <pre id="log"></pre>
+      <div class="job-actions" id="job-actions" hidden>
+        <button class="secondary" type="button" id="open-output">Open File</button>
+        <button class="secondary" type="button" id="open-output-location">Open File Location</button>
+        <button class="secondary" type="button" id="copy-output">Copy File</button>
+      </div>
+    </section>
+
+    <section class="panel files">
+      <div class="statusbar">
+        <h2>Recent Files</h2>
+        <span class="pill" id="file-count">0 files</span>
+      </div>
+      <div class="file-list" id="files"></div>
+    </section>
+  </main>
+
+  <script src="{{ url_for('static', filename='app.js') }}"></script>
+</body>
+</html>

@@ -1,0 +1,191 @@
+import argparse
+import sys
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from pathlib import Path
+
+import yt_dlp
+
+import ytdl
+
+
+def parse_playlist_range(raw: str, total: int) -> tuple[int, int]:
+    if total <= 0:
+        return (1, 0)
+
+    raw = (raw or "").strip()
+    if not raw:
+        return (1, total)
+
+    parts = raw.replace(",", "-").split("-", 1)
+    try:
+        start = int(parts[0].strip())
+        end = int(parts[1].strip()) if len(parts) > 1 and parts[1].strip() else start
+    except ValueError:
+        raise ValueError("Range must look like 1-10 or 7")
+
+    if start > end:
+        start, end = end, start
+    if start < 1 or end > total:
+        raise ValueError(f"Range must be between 1 and {total}")
+    return (start, end)
+
+
+def fetch_info(url: str, is_playlist: bool, cookie_arg: str | None) -> dict:
+    info_opts = {
+        "quiet": True,
+        "skip_download": True,
+        "cookiefile": cookie_arg,
+        "extractor_args": {"youtube": {"player_client": ["default"]}},
+        "extract_flat": bool(is_playlist),
+        "noplaylist": not is_playlist,
+        "remote_components": ["ejs:github"],
+    }
+    with yt_dlp.YoutubeDL(info_opts) as ydl:
+        return ydl.extract_info(url, download=False)
+
+
+def print_summary(title: str, stats: list[dict], subtitle_only: bool) -> None:
+    if not stats:
+        return
+
+    print("\n" + "=" * 60)
+    print(f"SUMMARY: {title}")
+    print("=" * 60)
+    print("{:<4} {:<40} {:<12} {:<10}".format("No.", "Title", "Status", "Size"))
+    print("-" * 60)
+
+    success_count = 0
+    total_size = 0.0
+    for stat in sorted(stats, key=lambda item: item["index"]):
+        short_title = (stat["title"][:37] + "...") if len(stat["title"]) > 37 else stat["title"]
+        size_str = f"{stat['size_mb']:.1f} MB" if stat["size_mb"] > 0 else "-"
+        print("{:<4} {:<40} {:<12} {:<10}".format(stat["index"], short_title, stat["status"], size_str))
+        if "Success" in stat["status"]:
+            success_count += 1
+            total_size += stat["size_mb"]
+
+    print("-" * 60)
+    item_label = "Items" if subtitle_only else "Videos"
+    print(f"Total: {len(stats)} {item_label} | Success: {success_count} | Total Size: {total_size:.1f} MB")
+    print("=" * 60)
+
+
+def run_job(args: argparse.Namespace) -> int:
+    cookie_file = Path(args.cookie_file)
+    cookie_arg = str(cookie_file) if cookie_file.is_file() else None
+    if cookie_arg:
+        print(f"Using cookie file: {cookie_arg}", flush=True)
+    else:
+        print("No cookies.txt file found. Public videos should still work.", flush=True)
+
+    url = args.url.strip()
+    is_playlist = args.source == "playlist"
+    if is_playlist:
+        url = ytdl.normalize_playlist_url(url)
+
+    print("Fetching video information...", flush=True)
+    info = fetch_info(url, is_playlist, cookie_arg)
+
+    downloads_dir = Path(args.downloads_dir)
+    downloads_dir.mkdir(parents=True, exist_ok=True)
+
+    if is_playlist:
+        title = ytdl.sanitize_filename(info.get("title", "Playlist"))
+        target_dir = downloads_dir / title
+        entries = list(info.get("entries") or [])
+        print(f"Playlist: {title} ({len(entries)} videos)", flush=True)
+    else:
+        title = ytdl.sanitize_filename(info.get("title", "Video"))
+        target_dir = downloads_dir
+        entries = [info]
+        print(f"Video: {title}", flush=True)
+
+    target_dir.mkdir(parents=True, exist_ok=True)
+    if not entries:
+        print("No entries found.", flush=True)
+        return 1
+
+    start_idx = 1
+    if is_playlist:
+        start_idx, end = parse_playlist_range(args.range, len(entries))
+        entries = entries[start_idx - 1:end]
+
+    if args.download_type == "video":
+        av_choice = "1"
+        preferred_format_id = args.format_id or "best"
+        want_subs = args.with_subtitles
+    elif args.download_type == "audio":
+        av_choice = "2"
+        preferred_format_id = "bestaudio/best"
+        want_subs = args.with_subtitles or args.audio_subtitles
+    elif args.download_type == "srt":
+        av_choice = "3"
+        preferred_format_id = None
+        want_subs = True
+    else:
+        av_choice = "4"
+        preferred_format_id = None
+        want_subs = True
+
+    print(f"Output folder: {target_dir}", flush=True)
+    if av_choice == "1":
+        print(f"Selected video format: {preferred_format_id}", flush=True)
+    print(f"Starting job with {args.workers} worker(s)...", flush=True)
+
+    stats = []
+    with ThreadPoolExecutor(max_workers=args.workers) as executor:
+        futures = [
+            executor.submit(
+                ytdl.process_video,
+                i,
+                entry,
+                is_playlist,
+                cookie_arg,
+                target_dir,
+                av_choice,
+                preferred_format_id,
+                want_subs,
+            )
+            for i, entry in enumerate(entries, start=start_idx - 1)
+        ]
+
+        for future in as_completed(futures):
+            stats.append(future.result())
+
+    print_summary(title, stats, av_choice in ["3", "4"])
+    failures = [stat for stat in stats if "Failed" in stat["status"] or "No subtitles" in stat["status"]]
+    return 1 if failures else 0
+
+
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(description="Run a youtube-downloader web job.")
+    parser.add_argument("--url", required=True)
+    parser.add_argument("--source", choices=["single", "playlist"], default="single")
+    parser.add_argument("--download-type", choices=["video", "audio", "srt", "txt"], default="video")
+    parser.add_argument("--range", default="")
+    parser.add_argument("--downloads-dir", default="downloads")
+    parser.add_argument("--cookie-file", default="cookies.txt")
+    parser.add_argument("--workers", type=int, default=2)
+    parser.add_argument("--format-id", default="")
+    parser.add_argument("--with-subtitles", action="store_true")
+    parser.add_argument("--audio-subtitles", action="store_true")
+    return parser
+
+
+def main() -> int:
+    parser = build_parser()
+    args = parser.parse_args()
+    args.workers = max(1, min(args.workers, 16))
+
+    try:
+        return run_job(args)
+    except KeyboardInterrupt:
+        print("\nJob cancelled.", flush=True)
+        return 130
+    except Exception as exc:
+        print(f"ERROR: {exc}", flush=True)
+        return 1
+
+
+if __name__ == "__main__":
+    sys.exit(main())
