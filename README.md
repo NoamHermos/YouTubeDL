@@ -106,17 +106,45 @@ This project uses `yt-dlp`, which is distributed under the Unlicense. The
 existence of an open-source license for the software does not change the legal
 status of third-party media downloaded with it.
 
-## Project Files
+## Project Structure
 
-- `web_app.py` - small Flask entrypoint.
-- `youtube_downloader_web/` - organized web app package.
-  - `routes.py` - HTTP routes and API endpoints.
-  - `job_service.py` - job state, subprocess worker handling, live logs.
-  - `file_service.py` - downloaded file listing, opening, reveal-in-folder, clipboard copy.
-  - `format_service.py` - quality lookup and format option building.
-  - `templates/` and `static/` - web UI HTML, CSS, and JavaScript.
-- `web_worker.py` - background download worker used by the web UI.
-- `ytdl.py` - core download and subtitle-fixing logic, plus the legacy CLI.
-- `Dockerfile` / `docker-compose.yml` - container packaging.
+Core application:
+
+- `web_app.py` - small Flask entrypoint that creates and runs the web app.
+- `web_worker.py` - subprocess worker used by the web UI for download jobs.
+- `ytdl.py` - core `yt-dlp` download logic, subtitle selection, subtitle cleanup,
+  TXT transcript export, format helpers, and the legacy CLI flow.
+
+Web package:
+
+- `youtube_downloader_web/app.py` - Flask app factory.
+- `youtube_downloader_web/routes.py` - HTTP routes and JSON API endpoints.
+- `youtube_downloader_web/job_service.py` - job state, subprocess handling, live
+  log streaming, cancellation, and output detection.
+- `youtube_downloader_web/file_service.py` - downloaded file listing, safe path
+  resolution, open file, reveal in folder, and clipboard copy.
+- `youtube_downloader_web/format_service.py` - video information lookup and
+  quality option building.
+- `youtube_downloader_web/settings.py` - runtime paths and environment-backed
+  settings.
+- `youtube_downloader_web/templates/index.html` - web UI markup.
+- `youtube_downloader_web/static/app.js` - web UI behavior.
+- `youtube_downloader_web/static/styles.css` - web UI styling.
+
+Browser extension:
+
+- `youtube-extension/manifest.json` - Chrome/Edge Manifest V3 configuration.
+- `youtube-extension/content.js` / `content.css` - buttons injected into YouTube
+  video and playlist pages.
+- `youtube-extension/popup.html` / `popup.js` / `popup.css` - extension popup UI.
+- `youtube-extension/logo.png` and `youtube-extension/icons/` - extension logo
+  and browser icon sizes.
+
+Packaging and repository files:
+
+- `Dockerfile` and `docker-compose.yml` - container build and local compose setup.
 - `requirements.txt` - Python dependencies.
-- `youtube-extension/` - unpacked browser extension for YouTube.
+- `.env.example` - example environment variables.
+- `.gitignore` and `.dockerignore` - exclude downloads, cookies, logs, local
+  credentials, and runtime artifacts.
+- `.gitattributes` - keeps repository text files normalized.
