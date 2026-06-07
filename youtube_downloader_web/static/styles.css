@@ -165,9 +165,15 @@
       gap: 8px;
       margin-top: 12px;
     }
+    .file-actions {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 10px;
+      margin: 10px 0 4px;
+    }
     .file-row {
       display: grid;
-      grid-template-columns: minmax(0, 1fr) 96px 150px 112px;
+      grid-template-columns: 24px minmax(0, 1fr) 96px 150px;
       gap: 12px;
       align-items: center;
       border-top: 1px solid var(--border);
@@ -188,5 +194,5 @@
     @media (max-width: 860px) {
       main { grid-template-columns: 1fr; }
       header { align-items: flex-start; flex-direction: column; }
-      .row, .actions, .quality-grid, .job-actions, .file-row { grid-template-columns: 1fr; }
+      .row, .actions, .quality-grid, .job-actions, .file-actions, .file-row { grid-template-columns: 1fr; }
     }

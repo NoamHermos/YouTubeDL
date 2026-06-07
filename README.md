@@ -13,8 +13,10 @@ or that is available under a license that allows downloading.
 - Download fixed SRT subtitles.
 - Download TXT transcripts as continuous text.
 - Choose video quality from the same cleaned quality list used by the CLI.
+- Use a saved worker count for future browser sessions. The default is 4 workers.
 - View live job logs with a single updating progress line and download speed.
-- Open downloaded files, reveal their folder location, or copy files to the clipboard.
+- Download completed files from the browser.
+- Delete selected downloaded files, or clear the listed downloads.
 - Open the web UI directly from YouTube using the included browser extension.
 - Run locally with Python or package as a Docker container.
 

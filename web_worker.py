@@ -165,7 +165,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--range", default="")
     parser.add_argument("--downloads-dir", default="downloads")
     parser.add_argument("--cookie-file", default="cookies.txt")
-    parser.add_argument("--workers", type=int, default=2)
+    parser.add_argument("--workers", type=int, default=4)
     parser.add_argument("--format-id", default="")
     parser.add_argument("--with-subtitles", action="store_true")
     parser.add_argument("--audio-subtitles", action="store_true")

@@ -3,6 +3,7 @@ from flask import Blueprint, abort, jsonify, render_template, request, send_from
 
 from .file_service import (
     copy_file_to_clipboard,
+    delete_download_files,
     list_download_files,
     open_local_file,
     open_local_file_location,
@@ -110,6 +111,15 @@ def api_copy_file():
     try:
         copy_file_to_clipboard(resolve_download_file(payload))
         return jsonify({"ok": True})
+    except Exception as exc:
+        return jsonify({"error": str(exc)}), 400
+
+
+@bp.post("/api/files/delete")
+def api_delete_files():
+    payload = request.get_json(force=True, silent=True) or {}
+    try:
+        return jsonify(delete_download_files(payload.get("ids") or []))
     except Exception as exc:
         return jsonify({"error": str(exc)}), 400
 

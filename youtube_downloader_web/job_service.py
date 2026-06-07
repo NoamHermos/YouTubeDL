@@ -151,9 +151,9 @@ def public_job(job: dict) -> dict:
 
 def normalize_workers(raw_workers) -> int:
     try:
-        workers = int(raw_workers or 2)
+        workers = int(raw_workers or 4)
     except ValueError:
-        workers = 2
+        workers = 4
     return max(1, min(workers, 16))
 
 

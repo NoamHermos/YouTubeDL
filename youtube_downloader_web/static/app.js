@@ -11,8 +11,11 @@ const form = document.querySelector("#job-form");
     const loadFormatsButton = document.querySelector("#load-formats");
     const jobActions = document.querySelector("#job-actions");
     const openOutputButton = document.querySelector("#open-output");
-    const openOutputLocationButton = document.querySelector("#open-output-location");
-    const copyOutputButton = document.querySelector("#copy-output");
+    const selectAllFilesButton = document.querySelector("#select-all-files");
+    const clearSelectionButton = document.querySelector("#clear-selection");
+    const deleteSelectedFilesButton = document.querySelector("#delete-selected-files");
+    const deleteAllFilesButton = document.querySelector("#delete-all-files");
+    const workersStorageKey = "youtubeDownloaderWorkers";
     let currentJobId = null;
     let currentOutput = null;
     let pollTimer = null;
@@ -34,6 +37,11 @@ const form = document.querySelector("#job-form");
       for (const file of data.files) {
         const row = document.createElement("div");
         row.className = "file-row";
+        const checkbox = document.createElement("input");
+        checkbox.type = "checkbox";
+        checkbox.className = "file-checkbox";
+        checkbox.dataset.fileId = file.id;
+        checkbox.title = "Select file";
         const link = document.createElement("a");
         link.href = file.url;
         link.download = file.name.split("/").pop();
@@ -44,23 +52,20 @@ const form = document.querySelector("#job-form");
         const modified = document.createElement("span");
         modified.className = "muted";
         modified.textContent = file.modified;
-        const locationButton = document.createElement("button");
-        locationButton.type = "button";
-        locationButton.className = "secondary";
-        locationButton.textContent = "Location";
-        locationButton.addEventListener("click", async () => {
-          locationButton.disabled = true;
-          try {
-            await openFileLocation(file);
-          } catch (error) {
-            alert(error.message);
-          } finally {
-            locationButton.disabled = false;
-          }
-        });
-        row.append(link, size, modified, locationButton);
+        row.append(checkbox, link, size, modified);
         filesEl.appendChild(row);
       }
+    }
+
+    function applySavedPreferences() {
+      const savedWorkers = localStorage.getItem(workersStorageKey);
+      if (savedWorkers && form.elements.workers.querySelector(`option[value="${CSS.escape(savedWorkers)}"]`)) {
+        form.elements.workers.value = savedWorkers;
+      }
+    }
+
+    function saveWorkersPreference() {
+      localStorage.setItem(workersStorageKey, form.elements.workers.value);
     }
 
     function updateQualityVisibility() {
@@ -93,18 +98,12 @@ const form = document.querySelector("#job-form");
       }
       if (workers && form.elements.workers.querySelector(`option[value="${CSS.escape(workers)}"]`)) {
         form.elements.workers.value = workers;
+        saveWorkersPreference();
       }
       if (withSubtitles !== null) {
         form.elements.with_subtitles.checked = ["1", "true", "yes", "on"].includes(withSubtitles.toLowerCase());
       }
       return action;
-    }
-
-    function filePayload(file) {
-      if (typeof file === "string") {
-        return {name: file};
-      }
-      return {id: file.id, name: file.name, path: file.path};
     }
 
     function downloadFile(file) {
@@ -117,28 +116,44 @@ const form = document.querySelector("#job-form");
       link.remove();
     }
 
-    async function openFileLocation(file) {
-      const res = await fetch("/api/files/open-location", {
+    async function deleteFiles(fileIds) {
+      const res = await fetch("/api/files/delete", {
         method: "POST",
         headers: {"Content-Type": "application/json"},
-        body: JSON.stringify(filePayload(file))
+        body: JSON.stringify({ids: fileIds})
       });
       const data = await res.json();
       if (!res.ok) {
-        throw new Error(data.error || "Could not open file location");
+        throw new Error(data.error || "Could not delete files");
       }
+      return data;
     }
 
-    async function copyFile(file) {
-      const res = await fetch("/api/files/copy", {
-        method: "POST",
-        headers: {"Content-Type": "application/json"},
-        body: JSON.stringify(filePayload(file))
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data.error || "Could not copy file");
+    function selectedFileIds() {
+      return Array.from(document.querySelectorAll(".file-checkbox:checked"))
+        .map((checkbox) => checkbox.dataset.fileId)
+        .filter(Boolean);
+    }
+
+    async function deleteSelectedFiles() {
+      const ids = selectedFileIds();
+      if (!ids.length) {
+        alert("Select at least one file first.");
+        return;
       }
+      if (!confirm(`Delete ${ids.length} selected file(s)?`)) {
+        return;
+      }
+      await deleteFiles(ids);
+      await refreshFiles();
+    }
+
+    async function deleteAllFiles() {
+      if (!confirm("Delete all listed download files?")) {
+        return;
+      }
+      await deleteFiles(["*"]);
+      await refreshFiles();
     }
 
     function renderJobActions(job) {
@@ -147,10 +162,6 @@ const form = document.querySelector("#job-form");
       if (!currentOutput) return;
       openOutputButton.textContent = "Download File";
       openOutputButton.title = currentOutput.name;
-      openOutputLocationButton.textContent = "Open File Location";
-      openOutputLocationButton.title = currentOutput.path || currentOutput.name;
-      copyOutputButton.textContent = "Copy File";
-      copyOutputButton.title = currentOutput.name;
     }
 
     async function loadQualities() {
@@ -246,6 +257,7 @@ const form = document.querySelector("#job-form");
 
     document.querySelector("#refresh-files").addEventListener("click", refreshFiles);
     form.elements.download_type.addEventListener("change", updateQualityVisibility);
+    form.elements.workers.addEventListener("change", saveWorkersPreference);
     loadFormatsButton.addEventListener("click", loadQualities);
     openOutputButton.addEventListener("click", async () => {
       if (!currentOutput) return;
@@ -256,35 +268,37 @@ const form = document.querySelector("#job-form");
         openOutputButton.disabled = false;
       }
     });
-    openOutputLocationButton.addEventListener("click", async () => {
-      if (!currentOutput) return;
-      openOutputLocationButton.disabled = true;
-      try {
-        await openFileLocation(currentOutput);
-      } finally {
-        openOutputLocationButton.disabled = false;
-      }
+    selectAllFilesButton.addEventListener("click", () => {
+      document.querySelectorAll(".file-checkbox").forEach((checkbox) => {
+        checkbox.checked = true;
+      });
     });
-    copyOutputButton.addEventListener("click", async () => {
-      if (!currentOutput) return;
-      copyOutputButton.disabled = true;
-      const oldText = copyOutputButton.textContent;
+    clearSelectionButton.addEventListener("click", () => {
+      document.querySelectorAll(".file-checkbox").forEach((checkbox) => {
+        checkbox.checked = false;
+      });
+    });
+    deleteSelectedFilesButton.addEventListener("click", async () => {
+      deleteSelectedFilesButton.disabled = true;
       try {
-        await copyFile(currentOutput);
-        copyOutputButton.textContent = "Copied";
-        setTimeout(() => copyOutputButton.textContent = oldText, 1400);
+        await deleteSelectedFiles();
       } catch (error) {
-        try {
-          await navigator.clipboard.writeText(currentOutput.path || currentOutput.name);
-          copyOutputButton.textContent = "Path Copied";
-          setTimeout(() => copyOutputButton.textContent = oldText, 1400);
-        } finally {
-          copyOutputButton.disabled = false;
-        }
-        return;
+        alert(error.message);
+      } finally {
+        deleteSelectedFilesButton.disabled = false;
       }
-      copyOutputButton.disabled = false;
     });
+    deleteAllFilesButton.addEventListener("click", async () => {
+      deleteAllFilesButton.disabled = true;
+      try {
+        await deleteAllFiles();
+      } catch (error) {
+        alert(error.message);
+      } finally {
+        deleteAllFilesButton.disabled = false;
+      }
+    });
+    applySavedPreferences();
     const startupAction = applyUrlParams();
     updateQualityVisibility();
     refreshFiles();

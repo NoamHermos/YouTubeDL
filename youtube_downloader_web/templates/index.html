@@ -53,9 +53,9 @@
           <label>
             Workers
             <select name="workers">
-              <option value="2">2</option>
               <option value="1">1</option>
-              <option value="4">4</option>
+              <option value="2">2</option>
+              <option value="4" selected>4</option>
               <option value="6">6</option>
               <option value="8">8</option>
               <option value="12">12</option>
@@ -100,8 +100,6 @@
       <pre id="log"></pre>
       <div class="job-actions" id="job-actions" hidden>
         <button class="secondary" type="button" id="open-output">Download File</button>
-        <button class="secondary" type="button" id="open-output-location">Open File Location</button>
-        <button class="secondary" type="button" id="copy-output">Copy File</button>
       </div>
     </section>
 
@@ -109,6 +107,12 @@
       <div class="statusbar">
         <h2>Recent Files</h2>
         <span class="pill" id="file-count">0 files</span>
+      </div>
+      <div class="file-actions">
+        <button class="secondary" type="button" id="select-all-files">Select All</button>
+        <button class="secondary" type="button" id="clear-selection">Clear Selection</button>
+        <button class="danger" type="button" id="delete-selected-files">Delete Selected</button>
+        <button class="danger" type="button" id="delete-all-files">Delete All</button>
       </div>
       <div class="file-list" id="files"></div>
     </section>

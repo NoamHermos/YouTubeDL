@@ -114,6 +114,35 @@ def resolve_download_file(payload: dict) -> Path:
     return resolve_path_inside_downloads(name)
 
 
+def cleanup_empty_download_dirs() -> None:
+    for path in sorted(DOWNLOADS_DIR.rglob("*"), reverse=True):
+        if not path.is_dir():
+            continue
+        try:
+            path.relative_to(DOWNLOADS_DIR)
+            path.rmdir()
+        except OSError:
+            continue
+
+
+def delete_download_files(file_ids: list[str]) -> dict:
+    if not file_ids:
+        raise ValueError("No files selected")
+
+    if "*" in file_ids:
+        files = [resolve_path_inside_downloads(item["name"]) for item in list_download_files(limit=10000)]
+    else:
+        files = [resolve_download_file({"id": file_id}) for file_id in file_ids]
+
+    deleted = []
+    for path in files:
+        path.unlink()
+        deleted.append(path.relative_to(DOWNLOADS_DIR).as_posix())
+
+    cleanup_empty_download_dirs()
+    return {"ok": True, "deleted": deleted, "count": len(deleted)}
+
+
 def open_local_file(path: Path) -> None:
     if hasattr(os, "startfile"):
         os.startfile(str(path))  # type: ignore[attr-defined]
