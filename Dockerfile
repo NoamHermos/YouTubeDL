@@ -20,8 +20,6 @@ COPY ytdl.py web_app.py web_worker.py ./
 COPY youtube_downloader_web ./youtube_downloader_web
 COPY ytdl_core ./ytdl_core
 
-RUN mkdir -p /app/downloads
-
 EXPOSE 8080
 
 CMD ["python", "web_app.py"]
