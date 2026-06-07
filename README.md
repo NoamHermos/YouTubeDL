@@ -45,7 +45,17 @@ Open:
 http://127.0.0.1:8080
 ```
 
-Downloaded files are written to `./downloads` on the host.
+Downloaded files are written to `./downloads` on the host by default.
+
+On NAS or Portainer deployments, prefer an absolute host path on a large volume
+so large MP4 merges have enough working space:
+
+```env
+HOST_DOWNLOADS_DIR=/volume1/YouTubeDL/downloads
+```
+
+Then redeploy the stack. The container will still see the folder as
+`/app/downloads`.
 
 ## YouTube Browser Extension
 
