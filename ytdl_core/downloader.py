@@ -167,15 +167,24 @@ def process_video(i, entry, is_playlist, cookie_arg, target_dir, av_choice, pref
         elif av_choice == "2": 
             final_format_str = preferred_format_id if preferred_format_id in current_formats else "bestaudio/best"
         else: 
+            mp4_best_format = (
+                "bv*[ext=mp4]+ba[ext=m4a]/"
+                "bv*[ext=mp4]+ba[acodec^=mp4a]/"
+                "b[ext=mp4]/best[ext=mp4]/best"
+            )
             # Check if Best Quality (Auto) is selected
             if preferred_format_id == "best":
-                final_format_str = "bv*+ba/best"
+                final_format_str = mp4_best_format
             # Normal check for specific quality
             elif preferred_format_id in current_formats:
-                final_format_str = f"{preferred_format_id}+bestaudio/best"
+                final_format_str = (
+                    f"{preferred_format_id}+ba[ext=m4a]/"
+                    f"{preferred_format_id}+ba[acodec^=mp4a]/"
+                    f"{preferred_format_id}"
+                )
             else:
                 print(f"   ⚠️ Preferred format {preferred_format_id} not available. Falling back to 'best'.")
-                final_format_str = "bv*+ba/best"
+                final_format_str = mp4_best_format
 
         # 3. Smart Subtitle Logic
         subs_config = get_best_subs_config(full_info, want_subs)

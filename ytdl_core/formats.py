@@ -23,11 +23,13 @@ def sizeof_mb(size_bytes):
 
 
 def format_score(fmt) -> tuple:
+    ext = (fmt.get("ext") or "").lower()
+    is_mp4 = 1 if ext == "mp4" else 0
     proto = (fmt.get("protocol") or "").lower()
     is_efficient = 0 if ("m3u8" in proto or "http_dash_segments" in proto) else 1
     tbr = fmt.get("tbr") or 0
     fps = fmt.get("fps") or 0
-    return (is_efficient, tbr, fps)
+    return (is_mp4, is_efficient, tbr, fps)
 
 
 def get_clean_format_list(formats, for_audio=False):
