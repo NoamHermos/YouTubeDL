@@ -65,6 +65,17 @@ so you can choose before starting. Keep the local web app running at:
 http://127.0.0.1:8080
 ```
 
+If the web app runs on a NAS, server, or Portainer instead of your local
+machine, open the extension popup and set `Server URL` to the server address,
+for example:
+
+```text
+http://192.168.1.50:8080/
+```
+
+The popup buttons and the buttons injected into YouTube pages will use the saved
+server URL.
+
 ## Cookies
 
 Public videos usually work without cookies.

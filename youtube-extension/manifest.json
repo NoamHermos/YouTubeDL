@@ -3,7 +3,7 @@
   "name": "Local YouTube Downloader",
   "version": "1.0.0",
   "description": "Open the local YouTube Downloader web UI from YouTube videos and playlists.",
-  "permissions": ["tabs"],
+  "permissions": ["tabs", "storage"],
   "icons": {
     "16": "icons/icon16.png",
     "32": "icons/icon32.png",

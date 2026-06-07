@@ -1,5 +1,6 @@
 (function () {
-  const WEB_APP_BASE = "http://127.0.0.1:8080/";
+  const DEFAULT_WEB_APP_BASE = "http://127.0.0.1:8080/";
+  const SERVER_URL_KEY = "webAppBase";
   const TOOLBAR_ID = "ytdl-local-toolbar";
   const TYPES = [
     {type: "video", label: "MP4"},
@@ -24,8 +25,27 @@
     return url.pathname.startsWith("/playlist") ? "playlist" : "single";
   }
 
-  function openDownloader(type) {
-    const target = new URL(WEB_APP_BASE);
+  function normalizeServerUrl(rawValue) {
+    const raw = (rawValue || "").trim() || DEFAULT_WEB_APP_BASE;
+    const url = new URL(raw);
+    if (!["http:", "https:"].includes(url.protocol)) {
+      throw new Error("Use http:// or https://");
+    }
+    if (!url.pathname.endsWith("/")) {
+      url.pathname += "/";
+    }
+    url.search = "";
+    url.hash = "";
+    return url.toString();
+  }
+
+  async function getWebAppBase() {
+    const stored = await chrome.storage.sync.get({[SERVER_URL_KEY]: DEFAULT_WEB_APP_BASE});
+    return normalizeServerUrl(stored[SERVER_URL_KEY]);
+  }
+
+  async function openDownloader(type) {
+    const target = new URL(await getWebAppBase());
     target.searchParams.set("url", currentYouTubeUrl());
     target.searchParams.set("type", type);
     target.searchParams.set("source", currentSource());
@@ -34,6 +54,10 @@
       target.searchParams.set("with_subtitles", "true");
     }
     window.open(target.toString(), "_blank", "noopener,noreferrer");
+  }
+
+  async function openApp() {
+    window.open(await getWebAppBase(), "_blank", "noopener,noreferrer");
   }
 
   function createToolbar() {
@@ -60,9 +84,7 @@
     openButton.type = "button";
     openButton.className = "ytdl-local-button secondary";
     openButton.textContent = "Open Downloader";
-    openButton.addEventListener("click", () => {
-      window.open(WEB_APP_BASE, "_blank", "noopener,noreferrer");
-    });
+    openButton.addEventListener("click", openApp);
     toolbar.appendChild(openButton);
     return toolbar;
   }

@@ -1,5 +1,37 @@
-const WEB_APP_BASE = "http://127.0.0.1:8080/";
+const DEFAULT_WEB_APP_BASE = "http://127.0.0.1:8080/";
+const SERVER_URL_KEY = "webAppBase";
 const statusEl = document.querySelector("#status");
+const serverUrlInput = document.querySelector("#server-url");
+
+function normalizeServerUrl(rawValue) {
+  const raw = (rawValue || "").trim() || DEFAULT_WEB_APP_BASE;
+  const url = new URL(raw);
+  if (!["http:", "https:"].includes(url.protocol)) {
+    throw new Error("Use http:// or https://");
+  }
+  if (!url.pathname.endsWith("/")) {
+    url.pathname += "/";
+  }
+  url.search = "";
+  url.hash = "";
+  return url.toString();
+}
+
+async function getWebAppBase() {
+  const stored = await chrome.storage.sync.get({[SERVER_URL_KEY]: DEFAULT_WEB_APP_BASE});
+  return normalizeServerUrl(stored[SERVER_URL_KEY]);
+}
+
+async function saveWebAppBase() {
+  try {
+    const normalized = normalizeServerUrl(serverUrlInput.value);
+    await chrome.storage.sync.set({[SERVER_URL_KEY]: normalized});
+    serverUrlInput.value = normalized;
+    statusEl.textContent = "Server saved.";
+  } catch (error) {
+    statusEl.textContent = error.message;
+  }
+}
 
 function sourceForUrl(rawUrl) {
   try {
@@ -33,7 +65,7 @@ async function openDownloader(type) {
     return;
   }
 
-  const target = new URL(WEB_APP_BASE);
+  const target = new URL(await getWebAppBase());
   target.searchParams.set("url", cleanYouTubeUrl(tab.url));
   target.searchParams.set("type", type);
   target.searchParams.set("source", sourceForUrl(tab.url));
@@ -48,6 +80,16 @@ document.querySelectorAll("[data-type]").forEach((button) => {
   button.addEventListener("click", () => openDownloader(button.dataset.type));
 });
 
+document.querySelector("#save-server").addEventListener("click", saveWebAppBase);
+
 document.querySelector("#open-app").addEventListener("click", async () => {
-  await chrome.tabs.create({url: WEB_APP_BASE});
+  await chrome.tabs.create({url: await getWebAppBase()});
 });
+
+getWebAppBase()
+  .then((url) => {
+    serverUrlInput.value = url;
+  })
+  .catch((error) => {
+    statusEl.textContent = error.message;
+  });
