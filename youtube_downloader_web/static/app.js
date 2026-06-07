@@ -35,16 +35,9 @@ const form = document.querySelector("#job-form");
         const row = document.createElement("div");
         row.className = "file-row";
         const link = document.createElement("a");
-        link.href = "#";
+        link.href = file.url;
+        link.download = file.name.split("/").pop();
         link.textContent = file.name;
-        link.addEventListener("click", async (event) => {
-          event.preventDefault();
-          try {
-            await openFile(file);
-          } catch (error) {
-            alert(error.message);
-          }
-        });
         const size = document.createElement("span");
         size.className = "muted";
         size.textContent = file.size;
@@ -114,16 +107,14 @@ const form = document.querySelector("#job-form");
       return {id: file.id, name: file.name, path: file.path};
     }
 
-    async function openFile(file) {
-      const res = await fetch("/api/files/open", {
-        method: "POST",
-        headers: {"Content-Type": "application/json"},
-        body: JSON.stringify(filePayload(file))
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data.error || "Could not open file");
-      }
+    function downloadFile(file) {
+      const url = file.url || `/files/${encodeURIComponent(file.name)}`;
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = (file.name || "download").split("/").pop();
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
     }
 
     async function openFileLocation(file) {
@@ -154,7 +145,7 @@ const form = document.querySelector("#job-form");
       currentOutput = job.outputs && job.outputs.length ? job.outputs[0] : null;
       jobActions.hidden = !(job.status === "finished" && currentOutput);
       if (!currentOutput) return;
-      openOutputButton.textContent = "Open File";
+      openOutputButton.textContent = "Download File";
       openOutputButton.title = currentOutput.name;
       openOutputLocationButton.textContent = "Open File Location";
       openOutputLocationButton.title = currentOutput.path || currentOutput.name;
@@ -260,7 +251,7 @@ const form = document.querySelector("#job-form");
       if (!currentOutput) return;
       openOutputButton.disabled = true;
       try {
-        await openFile(currentOutput);
+        downloadFile(currentOutput);
       } finally {
         openOutputButton.disabled = false;
       }

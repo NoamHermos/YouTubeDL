@@ -116,4 +116,4 @@ def api_copy_file():
 
 @bp.get("/files/<path:filename>")
 def download_file(filename: str):
-    return send_from_directory(DOWNLOADS_DIR, filename, as_attachment=False)
+    return send_from_directory(DOWNLOADS_DIR, filename, as_attachment=True)
