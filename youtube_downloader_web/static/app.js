@@ -19,6 +19,7 @@ const form = document.querySelector("#job-form");
     let currentJobId = null;
     let currentOutput = null;
     let pollTimer = null;
+    const autoDownloadedJobIds = new Set();
 
     function setLog(text) {
       logEl.textContent = text || "";
@@ -164,6 +165,16 @@ const form = document.querySelector("#job-form");
       openOutputButton.title = currentOutput.name;
     }
 
+    function autoDownloadJobOutputs(job) {
+      if (job.status !== "finished" || !job.outputs || !job.outputs.length || autoDownloadedJobIds.has(job.id)) {
+        return;
+      }
+      autoDownloadedJobIds.add(job.id);
+      job.outputs.forEach((file, index) => {
+        window.setTimeout(() => downloadFile(file), index * 500);
+      });
+    }
+
     async function loadQualities() {
       const url = form.elements.url.value.trim();
       if (!url) {
@@ -241,6 +252,7 @@ const form = document.querySelector("#job-form");
         clearInterval(pollTimer);
         pollTimer = null;
         await refreshFiles();
+        autoDownloadJobOutputs(job);
       }
     }
 
