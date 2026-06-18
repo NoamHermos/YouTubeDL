@@ -1,4 +1,5 @@
 import argparse
+import shutil
 import sys
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
@@ -6,6 +7,8 @@ from pathlib import Path
 import yt_dlp
 
 import ytdl
+
+MAX_PLAYLIST_RETRIES = 2
 
 
 def parse_playlist_range(raw: str, total: int) -> tuple[int, int]:
@@ -70,6 +73,123 @@ def print_summary(title: str, stats: list[dict], subtitle_only: bool) -> None:
     print("=" * 60)
 
 
+def download_entries(
+    indexed_entries: list[tuple[int, dict]],
+    is_playlist: bool,
+    cookie_arg: str | None,
+    target_dir: Path,
+    av_choice: str,
+    preferred_format_id: str | None,
+    want_subs: bool,
+    workers: int,
+) -> list[dict]:
+    # Runs the (unchanged) per-video download function across the given entries.
+    stats: list[dict] = []
+    with ThreadPoolExecutor(max_workers=workers) as executor:
+        futures = [
+            executor.submit(
+                ytdl.process_video,
+                i,
+                entry,
+                is_playlist,
+                cookie_arg,
+                target_dir,
+                av_choice,
+                preferred_format_id,
+                want_subs,
+            )
+            for i, entry in indexed_entries
+        ]
+
+        for future in as_completed(futures):
+            stats.append(future.result())
+    return stats
+
+
+def is_missed(stat: dict) -> bool:
+    # A "miss" is an item that failed to download (transient errors worth retrying).
+    # "No subtitles" is a deterministic content issue, so it is not retried.
+    return "Failed" in stat["status"]
+
+
+def verify_and_retry_playlist(
+    stats: list[dict],
+    indexed_entries: list[tuple[int, dict]],
+    is_playlist: bool,
+    cookie_arg: str | None,
+    target_dir: Path,
+    av_choice: str,
+    preferred_format_id: str | None,
+    want_subs: bool,
+    workers: int,
+) -> list[dict]:
+    # After a playlist run, verify everything downloaded and retry the misses.
+    stats_by_index = {stat["index"]: stat for stat in stats}
+
+    for attempt in range(1, MAX_PLAYLIST_RETRIES + 1):
+        missed_indices = {idx for idx, stat in stats_by_index.items() if is_missed(stat)}
+        if not missed_indices:
+            break
+
+        retry_targets = [
+            (i, entry) for i, entry in indexed_entries if (i + 1) in missed_indices
+        ]
+        print(
+            f"\n🔄 Verification: {len(retry_targets)} item(s) missed. "
+            f"Retry attempt {attempt}/{MAX_PLAYLIST_RETRIES}...",
+            flush=True,
+        )
+
+        retry_stats = download_entries(
+            retry_targets,
+            is_playlist,
+            cookie_arg,
+            target_dir,
+            av_choice,
+            preferred_format_id,
+            want_subs,
+            workers,
+        )
+        for stat in retry_stats:
+            stats_by_index[stat["index"]] = stat
+
+    final_stats = list(stats_by_index.values())
+    still_missing = [stat for stat in final_stats if is_missed(stat)]
+    if still_missing:
+        print(
+            f"\n⚠️ Verification complete: {len(still_missing)} item(s) still failed "
+            f"after {MAX_PLAYLIST_RETRIES} retr{'y' if MAX_PLAYLIST_RETRIES == 1 else 'ies'}.",
+            flush=True,
+        )
+    else:
+        print("\n✅ Verification complete: all playlist items downloaded.", flush=True)
+    return final_stats
+
+
+def create_playlist_zip(target_dir: Path, downloads_dir: Path, title: str) -> Path | None:
+    # Packages everything downloaded for the playlist into a single ZIP for download.
+    media_files = [path for path in target_dir.rglob("*") if path.is_file()]
+    if not media_files:
+        print("\n📦 No files to package into a ZIP.", flush=True)
+        return None
+
+    zip_base = downloads_dir / title
+    stale_zip = zip_base.with_suffix(".zip")
+    if stale_zip.exists():
+        try:
+            stale_zip.unlink()
+        except OSError:
+            pass
+
+    archive_path = Path(shutil.make_archive(str(zip_base), "zip", root_dir=str(target_dir)))
+    size_mb = archive_path.stat().st_size / (1024 * 1024)
+    print(
+        f"\n📦 Packaged {len(media_files)} file(s) into: {archive_path.name} ({size_mb:.1f} MB)",
+        flush=True,
+    )
+    return archive_path
+
+
 def run_job(args: argparse.Namespace) -> int:
     cookie_file = Path(args.cookie_file)
     cookie_arg = str(cookie_file) if cookie_file.is_file() else None
@@ -132,27 +252,36 @@ def run_job(args: argparse.Namespace) -> int:
         print(f"Selected video format: {preferred_format_id}", flush=True)
     print(f"Starting job with {args.workers} worker(s)...", flush=True)
 
-    stats = []
-    with ThreadPoolExecutor(max_workers=args.workers) as executor:
-        futures = [
-            executor.submit(
-                ytdl.process_video,
-                i,
-                entry,
-                is_playlist,
-                cookie_arg,
-                target_dir,
-                av_choice,
-                preferred_format_id,
-                want_subs,
-            )
-            for i, entry in enumerate(entries, start=start_idx - 1)
-        ]
+    indexed_entries = list(enumerate(entries, start=start_idx - 1))
+    stats = download_entries(
+        indexed_entries,
+        is_playlist,
+        cookie_arg,
+        target_dir,
+        av_choice,
+        preferred_format_id,
+        want_subs,
+        args.workers,
+    )
 
-        for future in as_completed(futures):
-            stats.append(future.result())
+    if is_playlist:
+        stats = verify_and_retry_playlist(
+            stats,
+            indexed_entries,
+            is_playlist,
+            cookie_arg,
+            target_dir,
+            av_choice,
+            preferred_format_id,
+            want_subs,
+            args.workers,
+        )
 
     print_summary(title, stats, av_choice in ["3", "4"])
+
+    if is_playlist:
+        create_playlist_zip(target_dir, downloads_dir, title)
+
     failures = [stat for stat in stats if "Failed" in stat["status"] or "No subtitles" in stat["status"]]
     return 1 if failures else 0
 

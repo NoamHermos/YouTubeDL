@@ -109,10 +109,18 @@ def run_process(job_id: str, payload: dict) -> None:
             append_log(job_id, remaining_text)
 
         rc = proc.wait()
-        outputs = prioritize_job_outputs(
-            list_download_files(since=started_marker - 1, limit=20),
-            payload["download_type"],
-        )
+        recent_files = list_download_files(since=started_marker - 1, limit=200)
+        if payload["source"] == "playlist":
+            # Playlist downloads are packaged into a single ZIP by the worker.
+            # Expose only the ZIP so the UI downloads one archive instead of every file.
+            zip_files = [item for item in recent_files if item["name"].lower().endswith(".zip")]
+            if zip_files:
+                zip_files.sort(key=lambda item: item.get("mtime") or 0, reverse=True)
+                outputs = zip_files[:1]
+            else:
+                outputs = prioritize_job_outputs(recent_files, payload["download_type"])
+        else:
+            outputs = prioritize_job_outputs(recent_files, payload["download_type"])
         with jobs_lock:
             job = jobs[job_id]
             job["returncode"] = rc

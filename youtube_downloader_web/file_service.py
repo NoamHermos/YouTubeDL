@@ -35,7 +35,7 @@ def decode_file_id(file_id: str) -> str:
 
 def list_download_files(since: float | None = None, limit: int = 200) -> list[dict]:
     DOWNLOADS_DIR.mkdir(parents=True, exist_ok=True)
-    allowed_suffixes = {".mp4", ".mp3", ".webm", ".mkv", ".m4a", ".srt", ".txt"}
+    allowed_suffixes = {".mp4", ".mp3", ".webm", ".mkv", ".m4a", ".srt", ".txt", ".zip"}
     files = []
     for path in DOWNLOADS_DIR.rglob("*"):
         if path.suffix.lower() not in allowed_suffixes:
