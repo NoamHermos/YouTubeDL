@@ -157,9 +157,17 @@
   }
 
   function injectTextButtons() {
-    document.querySelectorAll("a#thumbnail[href*='/watch']").forEach((link) => {
+    const thumbnailLinks = document.querySelectorAll([
+      "ytd-thumbnail a[href*='/watch']",
+      "a#thumbnail[href*='/watch']",
+      "a#thumbnail-link[href*='/watch']",
+      "a[href*='/watch']:has(img)",
+      "a[href*='/watch']:has(yt-image)"
+    ].join(","));
+
+    thumbnailLinks.forEach((link) => {
       const videoUrl = cleanYouTubeUrl(link.href);
-      const host = link.closest("ytd-thumbnail") || link.parentElement;
+      const host = link.closest("ytd-thumbnail") || link.parentElement || link;
       if (!videoUrl || !host || host.querySelector(BUTTON_SELECTOR)) {
         return;
       }

@@ -39,18 +39,6 @@ async function getWebAppBase() {
   return normalizeServerUrl(stored[SERVER_URL_KEY]);
 }
 
-function serverPermissionPattern(serverUrl) {
-  const url = new URL(serverUrl);
-  return `${url.protocol}//${url.hostname}/*`;
-}
-
-async function ensureServerPermission(serverUrl) {
-  const granted = await chrome.permissions.contains({origins: [serverPermissionPattern(serverUrl)]});
-  if (!granted) {
-    throw new Error("Open the extension popup and click Save Server to allow access to the downloader server.");
-  }
-}
-
 async function getJobs() {
   const stored = await chrome.storage.local.get({[JOBS_KEY]: []});
   return stored[JOBS_KEY];
@@ -77,7 +65,6 @@ async function notifyJobsChanged() {
 async function startTxtDownload(rawUrl) {
   const url = cleanYouTubeUrl(rawUrl);
   const serverUrl = await getWebAppBase();
-  await ensureServerPermission(serverUrl);
   let response;
   try {
     response = await fetch(new URL("api/jobs", serverUrl), {
