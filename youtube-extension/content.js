@@ -142,7 +142,7 @@
       button.disabled = true;
       button.textContent = "...";
       try {
-        const result = await chrome.runtime.sendMessage({type: "start-txt-download", url: videoUrl});
+        const result = await chrome.runtime.sendMessage({type: "start-download", downloadType: "txt", url: videoUrl});
         showTextButtonResult(button, result);
       } catch (error) {
         showTextButtonResult(button, {error: error.message});

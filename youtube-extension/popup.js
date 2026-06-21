@@ -68,7 +68,8 @@ function renderJobs(jobs) {
     const meta = document.createElement("div");
     meta.className = "job-meta";
     const suffix = job.error ? ` - ${job.error}` : "";
-    meta.textContent = `${job.status} - ${Math.round(job.progress || 0)}%${suffix}`;
+    const downloadType = (job.downloadType || "txt").toUpperCase();
+    meta.textContent = `${downloadType} - ${job.status} - ${Math.round(job.progress || 0)}%${suffix}`;
     const track = document.createElement("div");
     track.className = "progress-track";
     const value = document.createElement("div");
@@ -85,14 +86,14 @@ async function refreshJobs() {
   renderJobs(response.jobs || []);
 }
 
-async function startTxtDownload() {
+async function startDownload(downloadType) {
   try {
     const url = cleanYouTubeUrl(youtubeUrlInput.value.trim());
-    const response = await chrome.runtime.sendMessage({type: "start-txt-download", url});
+    const response = await chrome.runtime.sendMessage({type: "start-download", downloadType, url});
     if (!response?.ok) {
       throw new Error(response?.error || "Could not start download.");
     }
-    statusEl.textContent = "TXT download added.";
+    statusEl.textContent = `${downloadType.toUpperCase()} download added.`;
     youtubeUrlInput.value = "";
     await refreshJobs();
   } catch (error) {
@@ -101,10 +102,12 @@ async function startTxtDownload() {
 }
 
 document.querySelector("#save-server").addEventListener("click", saveWebAppBase);
-document.querySelector("#download-txt").addEventListener("click", startTxtDownload);
+document.querySelectorAll("[data-download-type]").forEach((button) => {
+  button.addEventListener("click", () => startDownload(button.dataset.downloadType));
+});
 youtubeUrlInput.addEventListener("keydown", (event) => {
   if (event.key === "Enter") {
-    startTxtDownload();
+    startDownload("txt");
   }
 });
 chrome.runtime.onMessage.addListener((message) => {

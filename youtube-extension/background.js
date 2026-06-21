@@ -3,6 +3,7 @@ const SERVER_URL_KEY = "webAppBase";
 const JOBS_KEY = "txtDownloadJobs";
 const POLL_ALARM = "poll-txt-downloads";
 const MAX_SAVED_JOBS = 12;
+const DOWNLOAD_TYPES = new Set(["video", "audio", "txt"]);
 
 function normalizeServerUrl(rawValue) {
   const raw = (rawValue || "").trim() || DEFAULT_WEB_APP_BASE;
@@ -62,9 +63,27 @@ async function notifyJobsChanged() {
   chrome.runtime.sendMessage({type: "jobs-updated", jobs}).catch(() => {});
 }
 
-async function startTxtDownload(rawUrl) {
+async function startDownload(rawUrl, downloadType) {
+  if (!DOWNLOAD_TYPES.has(downloadType)) {
+    throw new Error("Unsupported download type.");
+  }
   const url = cleanYouTubeUrl(rawUrl);
   const serverUrl = await getWebAppBase();
+  const jobs = await getJobs();
+  const entry = {
+    id: `starting-${Date.now()}`,
+    sourceUrl: url,
+    title: titleForUrl(url),
+    downloadType,
+    serverUrl,
+    status: "starting",
+    progress: 0,
+    createdAt: Date.now(),
+  };
+  jobs.unshift(entry);
+  await saveJobs(jobs);
+  await notifyJobsChanged();
+
   let response;
   try {
     response = await fetch(new URL("api/jobs", serverUrl), {
@@ -73,28 +92,28 @@ async function startTxtDownload(rawUrl) {
       body: JSON.stringify({
         url,
         source: "single",
-        download_type: "txt",
+        download_type: downloadType,
         workers: 4,
       }),
     });
   } catch {
-    throw new Error("Cannot reach the downloader server. Open the extension and click Save Server.");
+    entry.status = "failed";
+    entry.error = "Cannot reach the downloader server. Open the extension and click Save Server.";
+    await saveJobs(jobs);
+    await notifyJobsChanged();
+    throw new Error(entry.error);
   }
   const payload = await response.json().catch(() => ({}));
   if (!response.ok) {
-    throw new Error(payload.error || `Downloader server returned ${response.status}.`);
+    entry.status = "failed";
+    entry.error = payload.error || `Downloader server returned ${response.status}.`;
+    await saveJobs(jobs);
+    await notifyJobsChanged();
+    throw new Error(entry.error);
   }
 
-  const jobs = await getJobs();
-  jobs.unshift({
-    id: payload.id,
-    sourceUrl: url,
-    title: titleForUrl(url),
-    serverUrl,
-    status: "queued",
-    progress: 0,
-    createdAt: Date.now(),
-  });
+  entry.id = payload.id;
+  entry.status = "queued";
   await saveJobs(jobs);
   await ensurePolling();
   await notifyJobsChanged();
@@ -172,8 +191,9 @@ chrome.alarms.onAlarm.addListener((alarm) => {
 });
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  if (message?.type === "start-txt-download") {
-    startTxtDownload(message.url)
+  if (message?.type === "start-download" || message?.type === "start-txt-download") {
+    const downloadType = message.downloadType || "txt";
+    startDownload(message.url, downloadType)
       .then((id) => sendResponse({ok: true, id}))
       .catch((error) => sendResponse({ok: false, error: error.message}));
     return true;

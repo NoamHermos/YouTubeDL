@@ -72,9 +72,9 @@ The extension keeps the MP4, MP3, SRT, TXT, and `Open Downloader` toolbar under
 YouTube video and playlist pages. It also adds a small `TXT` button at the
 top-right of each YouTube video thumbnail, including home, search, and suggested
 video cards. Thumbnail TXT buttons create a transcript job without opening a new
-tab. The extension popup accepts a YouTube video URL and shows the current TXT
-download progress. When a job finishes, Chrome downloads the TXT file
-immediately.
+tab. The extension popup accepts a YouTube video URL and has separate MP4, MP3,
+and TXT buttons with a compact download queue. When a job finishes, Chrome
+downloads the file immediately.
 
 Keep the downloader server running at:
 
