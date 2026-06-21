@@ -4,6 +4,9 @@ const JOBS_KEY = "txtDownloadJobs";
 const POLL_ALARM = "poll-txt-downloads";
 const MAX_SAVED_JOBS = 12;
 const DOWNLOAD_TYPES = new Set(["video", "audio", "txt"]);
+const FAST_POLL_DELAY_MS = 2000;
+let fastPollTimer = null;
+let pollPromise = null;
 
 function normalizeServerUrl(rawValue) {
   const raw = (rawValue || "").trim() || DEFAULT_WEB_APP_BASE;
@@ -125,13 +128,28 @@ function downloadUrl(serverUrl, file) {
 }
 
 async function pollJobs() {
+  if (pollPromise) {
+    return pollPromise;
+  }
+
+  pollPromise = pollJobsInternal();
+  try {
+    return await pollPromise;
+  } finally {
+    pollPromise = null;
+  }
+}
+
+async function pollJobsInternal() {
   const jobs = await getJobs();
   let changed = false;
+  let hasActiveJobs = false;
 
   for (const entry of jobs) {
     if (!["queued", "running", "cancelling"].includes(entry.status)) {
       continue;
     }
+    hasActiveJobs = true;
 
     try {
       const response = await fetch(new URL(`api/jobs/${entry.id}`, entry.serverUrl));
@@ -169,11 +187,26 @@ async function pollJobs() {
     await saveJobs(jobs);
     await notifyJobsChanged();
   }
+
+  if (hasActiveJobs) {
+    scheduleFastPoll();
+  }
+}
+
+function scheduleFastPoll() {
+  if (fastPollTimer) {
+    return;
+  }
+  fastPollTimer = setTimeout(async () => {
+    fastPollTimer = null;
+    await pollJobs();
+  }, FAST_POLL_DELAY_MS);
 }
 
 async function ensurePolling() {
   await chrome.alarms.create(POLL_ALARM, {periodInMinutes: 0.5});
   await pollJobs();
+  scheduleFastPoll();
 }
 
 chrome.runtime.onInstalled.addListener(() => {
