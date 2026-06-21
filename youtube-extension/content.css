@@ -1,12 +1,52 @@
-ytd-thumbnail {
+.ytdl-thumbnail-host {
   position: relative;
+}
+
+.ytdl-local-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin: 8px 0;
+}
+
+.ytdl-local-logo {
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  object-fit: cover;
+}
+
+.ytdl-local-button {
+  min-height: 32px;
+  padding: 7px 11px;
+  border: 1px solid rgba(15, 118, 110, 0.45);
+  border-radius: 18px;
+  background: #0f766e;
+  color: #ffffff;
+  cursor: pointer;
+  font: 600 12px/1.2 Roboto, Arial, sans-serif;
+}
+
+.ytdl-local-button:hover {
+  background: #0b5f59;
+}
+
+.ytdl-local-button.secondary {
+  background: transparent;
+  color: #0f766e;
+}
+
+html[dark] .ytdl-local-button.secondary,
+html[system-icons][dark] .ytdl-local-button.secondary {
+  color: #2dd4bf;
 }
 
 .ytdl-txt-thumbnail-button {
   position: absolute;
   top: 6px;
   right: 6px;
-  z-index: 3;
+  z-index: 5;
   min-width: 38px;
   min-height: 27px;
   padding: 4px 7px;

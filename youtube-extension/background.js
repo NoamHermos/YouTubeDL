@@ -39,6 +39,18 @@ async function getWebAppBase() {
   return normalizeServerUrl(stored[SERVER_URL_KEY]);
 }
 
+function serverPermissionPattern(serverUrl) {
+  const url = new URL(serverUrl);
+  return `${url.protocol}//${url.hostname}/*`;
+}
+
+async function ensureServerPermission(serverUrl) {
+  const granted = await chrome.permissions.contains({origins: [serverPermissionPattern(serverUrl)]});
+  if (!granted) {
+    throw new Error("Open the extension popup and click Save Server to allow access to the downloader server.");
+  }
+}
+
 async function getJobs() {
   const stored = await chrome.storage.local.get({[JOBS_KEY]: []});
   return stored[JOBS_KEY];
@@ -65,19 +77,25 @@ async function notifyJobsChanged() {
 async function startTxtDownload(rawUrl) {
   const url = cleanYouTubeUrl(rawUrl);
   const serverUrl = await getWebAppBase();
-  const response = await fetch(new URL("api/jobs", serverUrl), {
-    method: "POST",
-    headers: {"Content-Type": "application/json"},
-    body: JSON.stringify({
-      url,
-      source: "single",
-      download_type: "txt",
-      workers: 4,
-    }),
-  });
-  const payload = await response.json();
+  await ensureServerPermission(serverUrl);
+  let response;
+  try {
+    response = await fetch(new URL("api/jobs", serverUrl), {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({
+        url,
+        source: "single",
+        download_type: "txt",
+        workers: 4,
+      }),
+    });
+  } catch {
+    throw new Error("Cannot reach the downloader server. Open the extension and click Save Server.");
+  }
+  const payload = await response.json().catch(() => ({}));
   if (!response.ok) {
-    throw new Error(payload.error || "Could not start TXT download.");
+    throw new Error(payload.error || `Downloader server returned ${response.status}.`);
   }
 
   const jobs = await getJobs();
