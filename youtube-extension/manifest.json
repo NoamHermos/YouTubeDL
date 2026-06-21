@@ -14,9 +14,7 @@
     "https://www.youtube.com/*",
     "https://youtube.com/*",
     "http://127.0.0.1:8080/*",
-    "http://localhost:8080/*"
-  ],
-  "optional_host_permissions": [
+    "http://localhost:8080/*",
     "http://*/*",
     "https://*/*"
   ],

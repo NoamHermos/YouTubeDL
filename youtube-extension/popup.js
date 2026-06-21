@@ -32,7 +32,9 @@ async function getWebAppBase() {
 async function saveWebAppBase() {
   try {
     const normalized = normalizeServerUrl(serverUrlInput.value);
-    const allowed = await chrome.permissions.request({origins: [serverPermissionPattern(normalized)]});
+    const permissions = {origins: [serverPermissionPattern(normalized)]};
+    const alreadyAllowed = await chrome.permissions.contains(permissions);
+    const allowed = alreadyAllowed || await chrome.permissions.request(permissions);
     if (!allowed) {
       throw new Error("Allow access to the downloader server to continue.");
     }
