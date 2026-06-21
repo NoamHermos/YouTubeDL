@@ -2,6 +2,8 @@ const DEFAULT_WEB_APP_BASE = "http://127.0.0.1:8080/";
 const SERVER_URL_KEY = "webAppBase";
 const statusEl = document.querySelector("#status");
 const serverUrlInput = document.querySelector("#server-url");
+const youtubeUrlInput = document.querySelector("#youtube-url");
+const jobsEl = document.querySelector("#jobs");
 
 function normalizeServerUrl(rawValue) {
   const raw = (rawValue || "").trim() || DEFAULT_WEB_APP_BASE;
@@ -17,6 +19,11 @@ function normalizeServerUrl(rawValue) {
   return url.toString();
 }
 
+function serverPermissionPattern(serverUrl) {
+  const url = new URL(serverUrl);
+  return `${url.protocol}//${url.hostname}/*`;
+}
+
 async function getWebAppBase() {
   const stored = await chrome.storage.sync.get({[SERVER_URL_KEY]: DEFAULT_WEB_APP_BASE});
   return normalizeServerUrl(stored[SERVER_URL_KEY]);
@@ -25,6 +32,10 @@ async function getWebAppBase() {
 async function saveWebAppBase() {
   try {
     const normalized = normalizeServerUrl(serverUrlInput.value);
+    const allowed = await chrome.permissions.request({origins: [serverPermissionPattern(normalized)]});
+    if (!allowed) {
+      throw new Error("Allow access to the downloader server to continue.");
+    }
     await chrome.storage.sync.set({[SERVER_URL_KEY]: normalized});
     serverUrlInput.value = normalized;
     statusEl.textContent = "Server saved.";
@@ -33,57 +44,73 @@ async function saveWebAppBase() {
   }
 }
 
-function sourceForUrl(rawUrl) {
-  try {
-    const url = new URL(rawUrl);
-    return url.pathname.startsWith("/playlist") ? "playlist" : "single";
-  } catch {
-    return "single";
-  }
-}
-
 function cleanYouTubeUrl(rawUrl) {
   const url = new URL(rawUrl);
   if (url.pathname === "/watch" && url.searchParams.get("v")) {
     return `https://www.youtube.com/watch?v=${url.searchParams.get("v")}`;
   }
-  if (url.pathname.startsWith("/playlist") && url.searchParams.get("list")) {
-    return `https://www.youtube.com/playlist?list=${url.searchParams.get("list")}`;
-  }
-  return rawUrl;
+  throw new Error("Enter a YouTube video URL.");
 }
 
-async function activeTab() {
-  const [tab] = await chrome.tabs.query({active: true, currentWindow: true});
-  return tab;
-}
-
-async function openDownloader(type) {
-  const tab = await activeTab();
-  if (!tab?.url || !tab.url.includes("youtube.com")) {
-    statusEl.textContent = "Open a YouTube video or playlist first.";
+function renderJobs(jobs) {
+  jobsEl.textContent = "";
+  if (!jobs.length) {
+    jobsEl.innerHTML = '<div class="muted">No active downloads.</div>';
     return;
   }
-
-  const target = new URL(await getWebAppBase());
-  target.searchParams.set("url", cleanYouTubeUrl(tab.url));
-  target.searchParams.set("type", type);
-  target.searchParams.set("source", sourceForUrl(tab.url));
-  target.searchParams.set("action", type === "video" ? "fetch_qualities" : "start");
-  if (type === "video" || type === "audio") {
-    target.searchParams.set("with_subtitles", "true");
+  for (const job of jobs) {
+    const row = document.createElement("div");
+    row.className = "job";
+    const title = document.createElement("div");
+    title.className = "job-title";
+    title.textContent = job.title || job.sourceUrl;
+    title.title = job.sourceUrl;
+    const meta = document.createElement("div");
+    meta.className = "job-meta";
+    const suffix = job.error ? ` - ${job.error}` : "";
+    meta.textContent = `${job.status} - ${Math.round(job.progress || 0)}%${suffix}`;
+    const track = document.createElement("div");
+    track.className = "progress-track";
+    const value = document.createElement("div");
+    value.className = "progress-value";
+    value.style.width = `${Math.max(0, Math.min(100, job.progress || 0))}%`;
+    track.appendChild(value);
+    row.append(title, meta, track);
+    jobsEl.appendChild(row);
   }
-  await chrome.tabs.create({url: target.toString()});
 }
 
-document.querySelectorAll("[data-type]").forEach((button) => {
-  button.addEventListener("click", () => openDownloader(button.dataset.type));
-});
+async function refreshJobs() {
+  const response = await chrome.runtime.sendMessage({type: "get-jobs"});
+  renderJobs(response.jobs || []);
+}
+
+async function startTxtDownload() {
+  try {
+    const url = cleanYouTubeUrl(youtubeUrlInput.value.trim());
+    const response = await chrome.runtime.sendMessage({type: "start-txt-download", url});
+    if (!response?.ok) {
+      throw new Error(response?.error || "Could not start download.");
+    }
+    statusEl.textContent = "TXT download added.";
+    youtubeUrlInput.value = "";
+    await refreshJobs();
+  } catch (error) {
+    statusEl.textContent = error.message;
+  }
+}
 
 document.querySelector("#save-server").addEventListener("click", saveWebAppBase);
-
-document.querySelector("#open-app").addEventListener("click", async () => {
-  await chrome.tabs.create({url: await getWebAppBase()});
+document.querySelector("#download-txt").addEventListener("click", startTxtDownload);
+youtubeUrlInput.addEventListener("keydown", (event) => {
+  if (event.key === "Enter") {
+    startTxtDownload();
+  }
+});
+chrome.runtime.onMessage.addListener((message) => {
+  if (message?.type === "jobs-updated") {
+    renderJobs(message.jobs || []);
+  }
 });
 
 getWebAppBase()
@@ -93,3 +120,6 @@ getWebAppBase()
   .catch((error) => {
     statusEl.textContent = error.message;
   });
+
+refreshJobs();
+window.setInterval(refreshJobs, 2000);

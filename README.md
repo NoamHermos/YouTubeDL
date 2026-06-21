@@ -68,10 +68,13 @@ To load it:
 3. Click "Load unpacked".
 4. Select the `youtube-extension/` folder.
 
-When you open a YouTube video or playlist, the extension adds buttons for MP4,
-MP3, SRT, and TXT. MP3, SRT, and TXT start the job immediately in the local web
-UI. MP4 opens the local web UI and automatically fetches the available qualities
-so you can choose before starting. Keep the local web app running at:
+The extension adds a small `TXT` button at the top-right of each YouTube video
+thumbnail. Clicking it creates a transcript job in the configured downloader
+server without opening a new tab. The extension popup also accepts a YouTube
+video URL and shows the current TXT download progress. When a job finishes,
+Chrome downloads the TXT file immediately.
+
+Keep the downloader server running at:
 
 ```text
 http://127.0.0.1:8080
@@ -85,8 +88,9 @@ for example:
 http://192.168.1.50:8080/
 ```
 
-The popup buttons and the buttons injected into YouTube pages will use the saved
-server URL.
+Click `Save Server` after changing the address. Chrome will ask for one-time
+permission to contact that server; approve it so the extension can start jobs,
+read progress, and download completed TXT files.
 
 ## Cookies
 
@@ -168,9 +172,12 @@ Web package:
 Browser extension:
 
 - `youtube-extension/manifest.json` - Chrome/Edge Manifest V3 configuration.
-- `youtube-extension/content.js` / `content.css` - buttons injected into YouTube
-  video and playlist pages.
-- `youtube-extension/popup.html` / `popup.js` / `popup.css` - extension popup UI.
+- `youtube-extension/background.js` - TXT job queue, server polling, and browser
+  download handling.
+- `youtube-extension/content.js` / `content.css` - TXT buttons injected onto
+  YouTube video thumbnails.
+- `youtube-extension/popup.html` / `popup.js` / `popup.css` - compact URL input,
+  server configuration, and download progress UI.
 - `youtube-extension/logo.png` and `youtube-extension/icons/` - extension logo
   and browser icon sizes.
 

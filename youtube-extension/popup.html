@@ -16,13 +16,15 @@
       <input id="server-url" type="url" placeholder="http://127.0.0.1:8080/">
     </label>
     <button class="secondary" id="save-server">Save Server</button>
-    <div class="grid">
-      <button data-type="video">MP4</button>
-      <button data-type="audio">MP3</button>
-      <button data-type="srt">SRT</button>
-      <button data-type="txt">TXT</button>
-    </div>
-    <button class="secondary" id="open-app">Open App</button>
+    <label>
+      YouTube URL
+      <input id="youtube-url" type="url" placeholder="https://www.youtube.com/watch?v=...">
+    </label>
+    <button id="download-txt">Download TXT</button>
+    <section aria-label="Download status">
+      <h2>Downloads</h2>
+      <div id="jobs" class="jobs"><div class="muted">No active downloads.</div></div>
+    </section>
     <p id="status"></p>
   </main>
   <script src="popup.js"></script>

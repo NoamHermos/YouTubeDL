@@ -1,9 +1,9 @@
 {
   "manifest_version": 3,
   "name": "Local YouTube Downloader",
-  "version": "1.0.0",
-  "description": "Open the local YouTube Downloader web UI from YouTube videos and playlists.",
-  "permissions": ["tabs", "storage"],
+  "version": "1.1.0",
+  "description": "Download YouTube transcript TXT files through your configured downloader server.",
+  "permissions": ["alarms", "downloads", "storage"],
   "icons": {
     "16": "icons/icon16.png",
     "32": "icons/icon32.png",
@@ -16,6 +16,13 @@
     "http://127.0.0.1:8080/*",
     "http://localhost:8080/*"
   ],
+  "optional_host_permissions": [
+    "http://*/*",
+    "https://*/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
   "action": {
     "default_title": "YouTube Downloader",
     "default_popup": "popup.html",
