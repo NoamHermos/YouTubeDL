@@ -3,7 +3,7 @@ const SERVER_URL_KEY = "webAppBase";
 const JOBS_KEY = "txtDownloadJobs";
 const POLL_ALARM = "poll-txt-downloads";
 const MAX_SAVED_JOBS = 12;
-const DOWNLOAD_TYPES = new Set(["video", "audio", "txt"]);
+const DOWNLOAD_TYPES = new Set(["video", "audio", "srt", "txt"]);
 const FAST_POLL_DELAY_MS = 2000;
 let fastPollTimer = null;
 let pollPromise = null;
@@ -66,7 +66,7 @@ async function notifyJobsChanged() {
   chrome.runtime.sendMessage({type: "jobs-updated", jobs}).catch(() => {});
 }
 
-async function startDownload(rawUrl, downloadType) {
+async function startDownload(rawUrl, downloadType, options = {}) {
   if (!DOWNLOAD_TYPES.has(downloadType)) {
     throw new Error("Unsupported download type.");
   }
@@ -97,6 +97,7 @@ async function startDownload(rawUrl, downloadType) {
         source: "single",
         download_type: downloadType,
         workers: 4,
+        with_subtitles: Boolean(options.withSubtitles),
       }),
     });
   } catch {
@@ -174,7 +175,7 @@ async function pollJobsInternal() {
         }
         entry.status = "downloaded";
       } else if (job.status === "failed") {
-        entry.error = "The server could not create the TXT file.";
+        entry.error = `The server could not create the ${(entry.downloadType || "file").toUpperCase()} file.`;
       }
     } catch (error) {
       entry.status = "failed";
@@ -226,7 +227,7 @@ chrome.alarms.onAlarm.addListener((alarm) => {
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message?.type === "start-download" || message?.type === "start-txt-download") {
     const downloadType = message.downloadType || "txt";
-    startDownload(message.url, downloadType)
+    startDownload(message.url, downloadType, message.options || {})
       .then((id) => sendResponse({ok: true, id}))
       .catch((error) => sendResponse({ok: false, error: error.message}));
     return true;

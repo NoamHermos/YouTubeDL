@@ -69,12 +69,14 @@ To load it:
 4. Select the `youtube-extension/` folder.
 
 The extension keeps the MP4, MP3, SRT, TXT, and `Open Downloader` toolbar under
-YouTube video and playlist pages. It also adds a small `TXT` button at the
-top-right of each YouTube video thumbnail, including home, search, and suggested
-video cards. Thumbnail TXT buttons create a transcript job without opening a new
-tab. The extension popup accepts a YouTube video URL and has separate MP4, MP3,
-and TXT buttons with a compact download queue. When a job finishes, Chrome
-downloads the file immediately.
+YouTube video and playlist pages. The download buttons add jobs directly to the
+extension queue without opening the web UI; `Open Downloader` remains available
+when you want the full page. It also adds a small `TXT` button at the top-right
+of each YouTube video thumbnail, including home, search, and suggested video
+cards. Thumbnail TXT buttons create a transcript job without opening a new tab.
+The extension popup accepts a YouTube video URL and has separate MP4, MP3, and
+TXT buttons with a compact download queue. When a job finishes, Chrome downloads
+the file immediately.
 
 Keep the downloader server running at:
 
@@ -174,10 +176,10 @@ Web package:
 Browser extension:
 
 - `youtube-extension/manifest.json` - Chrome/Edge Manifest V3 configuration.
-- `youtube-extension/background.js` - TXT job queue, server polling, and browser
-  download handling.
-- `youtube-extension/content.js` / `content.css` - TXT buttons injected onto
-  YouTube video thumbnails.
+- `youtube-extension/background.js` - extension job queue, server polling, and
+  browser download handling.
+- `youtube-extension/content.js` / `content.css` - YouTube toolbar controls and
+  TXT buttons injected onto YouTube video thumbnails.
 - `youtube-extension/popup.html` / `popup.js` / `popup.css` - compact URL input,
   server configuration, and download progress UI.
 - `youtube-extension/logo.png` and `youtube-extension/icons/` - extension logo

@@ -41,24 +41,39 @@
     return cleanYouTubeUrl(window.location.href) || window.location.href;
   }
 
-  function currentSource() {
-    return new URL(window.location.href).pathname.startsWith("/playlist") ? "playlist" : "single";
-  }
-
-  async function openDownloader(type) {
-    const target = new URL(await getWebAppBase());
-    target.searchParams.set("url", currentYouTubeUrl());
-    target.searchParams.set("type", type);
-    target.searchParams.set("source", currentSource());
-    target.searchParams.set("action", type === "video" ? "fetch_qualities" : "start");
-    if (type === "video" || type === "audio") {
-      target.searchParams.set("with_subtitles", "true");
-    }
-    window.open(target.toString(), "_blank", "noopener,noreferrer");
-  }
-
   async function openApp() {
     window.open(await getWebAppBase(), "_blank", "noopener,noreferrer");
+  }
+
+  function showButtonResult(button, result, successText, defaultText) {
+    if (result?.ok) {
+      button.textContent = successText;
+      button.title = "Download added to the extension queue";
+      return;
+    }
+    const error = result?.error || "Could not start download";
+    button.textContent = error.includes("Save Server") ? "Setup" : "Error";
+    button.title = error;
+  }
+
+  async function startExtensionDownload(downloadType, button, defaultText) {
+    button.disabled = true;
+    button.textContent = "Adding...";
+    try {
+      const result = await chrome.runtime.sendMessage({
+        type: "start-download",
+        downloadType,
+        url: currentYouTubeUrl(),
+      });
+      showButtonResult(button, result, "Added", defaultText);
+    } catch (error) {
+      showButtonResult(button, {error: error.message}, "Added", defaultText);
+    }
+    window.setTimeout(() => {
+      button.disabled = false;
+      button.textContent = defaultText;
+      button.title = "";
+    }, 2400);
   }
 
   function createToolbar() {
@@ -74,10 +89,11 @@
 
     for (const item of TYPES) {
       const button = document.createElement("button");
+      const text = `Download ${item.label}`;
       button.type = "button";
       button.className = "ytdl-local-button";
-      button.textContent = `Download ${item.label}`;
-      button.addEventListener("click", () => openDownloader(item.type));
+      button.textContent = text;
+      button.addEventListener("click", () => startExtensionDownload(item.type, button, text));
       toolbar.appendChild(button);
     }
 
@@ -112,17 +128,6 @@
     }
   }
 
-  function showTextButtonResult(button, result) {
-    if (result?.ok) {
-      button.textContent = "Added";
-      button.title = "TXT download added";
-      return;
-    }
-    const error = result?.error || "Could not start TXT download";
-    button.textContent = error.includes("Save Server") ? "Setup" : "Error";
-    button.title = error;
-  }
-
   function stopThumbnailNavigation(event) {
     event.preventDefault();
     event.stopPropagation();
@@ -143,9 +148,9 @@
       button.textContent = "...";
       try {
         const result = await chrome.runtime.sendMessage({type: "start-download", downloadType: "txt", url: videoUrl});
-        showTextButtonResult(button, result);
+        showButtonResult(button, result, "Added", "TXT");
       } catch (error) {
-        showTextButtonResult(button, {error: error.message});
+        showButtonResult(button, {error: error.message}, "Added", "TXT");
       }
       window.setTimeout(() => {
         button.disabled = false;
@@ -154,6 +159,39 @@
       }, 2400);
     });
     return button;
+  }
+
+  function findVideoContainer(link) {
+    return link.closest([
+      "ytd-playlist-panel-video-renderer",
+      "ytd-playlist-video-renderer",
+      "ytd-compact-video-renderer",
+      "ytd-video-renderer",
+      "ytd-rich-item-renderer",
+      "ytd-grid-video-renderer",
+      "ytd-reel-item-renderer",
+      "ytd-compact-playlist-renderer",
+      "ytd-radio-renderer"
+    ].join(","));
+  }
+
+  function findThumbnailHost(link) {
+    return (
+      link.closest("ytd-thumbnail") ||
+      link.closest("#thumbnail-container") ||
+      link.closest("#thumbnail") ||
+      link.parentElement ||
+      link
+    );
+  }
+
+  function pruneDuplicateTextButtons(container) {
+    const buttons = container.querySelectorAll(BUTTON_SELECTOR);
+    buttons.forEach((button, index) => {
+      if (index > 0) {
+        button.remove();
+      }
+    });
   }
 
   function injectTextButtons() {
@@ -167,12 +205,23 @@
 
     thumbnailLinks.forEach((link) => {
       const videoUrl = cleanYouTubeUrl(link.href);
-      const host = link.closest("ytd-thumbnail") || link.parentElement || link;
-      if (!videoUrl || !host || host.querySelector(BUTTON_SELECTOR)) {
+      const container = findVideoContainer(link) || link.closest("ytd-thumbnail") || link.parentElement || link;
+      const host = findThumbnailHost(link);
+      if (!videoUrl || !host || !container) {
         return;
       }
+      if (container.querySelector(BUTTON_SELECTOR)) {
+        pruneDuplicateTextButtons(container);
+        container.dataset.ytdlTxtInjected = videoUrl;
+        return;
+      }
+      if (container.dataset.ytdlTxtInjected === videoUrl) {
+        return;
+      }
+      container.dataset.ytdlTxtInjected = videoUrl;
       host.classList.add("ytdl-thumbnail-host");
       host.appendChild(createTextButton(videoUrl));
+      pruneDuplicateTextButtons(container);
     });
   }
 
