@@ -64,7 +64,7 @@
         type: "start-download",
         downloadType,
         url: currentYouTubeUrl(),
-        options: {showPopup: true},
+        options: {showPopup: true, isolatedOutputs: true},
       });
       showButtonResult(button, result, "Added", defaultText);
     } catch (error) {
@@ -152,7 +152,7 @@
           type: "start-download",
           downloadType: "txt",
           url: videoUrl,
-          options: {showPopup: true},
+          options: {showPopup: true, isolatedOutputs: true},
         });
         showButtonResult(button, result, "Added", "TXT");
       } catch (error) {

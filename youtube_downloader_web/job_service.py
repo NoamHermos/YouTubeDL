@@ -46,6 +46,7 @@ def append_log(job_id: str, text: str) -> None:
 
 
 def build_worker_command(payload: dict) -> list[str]:
+    downloads_dir = payload.get("downloads_dir") or str(DOWNLOADS_DIR)
     cmd = [
         sys.executable,
         "-u",
@@ -59,7 +60,7 @@ def build_worker_command(payload: dict) -> list[str]:
         "--range",
         payload.get("range") or "",
         "--downloads-dir",
-        str(DOWNLOADS_DIR),
+        downloads_dir,
         "--cookie-file",
         str(COOKIE_FILE),
         "--workers",
@@ -109,7 +110,10 @@ def run_process(job_id: str, payload: dict) -> None:
             append_log(job_id, remaining_text)
 
         rc = proc.wait()
-        recent_files = list_download_files(since=started_marker - 1, limit=200)
+        output_scan_dir = DOWNLOADS_DIR
+        if payload.get("downloads_dir"):
+            output_scan_dir = DOWNLOADS_DIR / os.path.relpath(payload["downloads_dir"], DOWNLOADS_DIR)
+        recent_files = list_download_files(since=started_marker - 1, limit=200, base_dir=output_scan_dir)
         if payload["source"] == "playlist":
             # Playlist downloads are packaged into a single ZIP by the worker.
             # Expose only the ZIP so the UI downloads one archive instead of every file.
@@ -167,6 +171,11 @@ def normalize_workers(raw_workers) -> int:
 
 def create_job_record(payload: dict) -> str:
     job_id = uuid.uuid4().hex[:12]
+    downloads_dir = DOWNLOADS_DIR
+    if payload.get("isolated_outputs"):
+        downloads_dir = DOWNLOADS_DIR / ".extension-jobs" / job_id
+        downloads_dir.mkdir(parents=True, exist_ok=True)
+
     job = {
         "id": job_id,
         "url": payload["url"],
@@ -174,6 +183,7 @@ def create_job_record(payload: dict) -> str:
         "download_type": payload["download_type"],
         "range": payload.get("range") or "",
         "workers": normalize_workers(payload.get("workers")),
+        "downloads_dir": str(downloads_dir),
         "format_id": payload.get("format_id") or "",
         "audio_subtitles": bool(payload.get("audio_subtitles")),
         "with_subtitles": bool(payload.get("with_subtitles")),

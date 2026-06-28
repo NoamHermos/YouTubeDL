@@ -33,11 +33,17 @@ def decode_file_id(file_id: str) -> str:
         raise ValueError("Invalid file id") from exc
 
 
-def list_download_files(since: float | None = None, limit: int = 200) -> list[dict]:
+def list_download_files(since: float | None = None, limit: int = 200, base_dir: Path | None = None) -> list[dict]:
     DOWNLOADS_DIR.mkdir(parents=True, exist_ok=True)
+    scan_root = (base_dir or DOWNLOADS_DIR).resolve()
+    try:
+        scan_root.relative_to(DOWNLOADS_DIR)
+    except ValueError:
+        scan_root = DOWNLOADS_DIR
+
     allowed_suffixes = {".mp4", ".mp3", ".webm", ".mkv", ".m4a", ".srt", ".txt", ".zip"}
     files = []
-    for path in DOWNLOADS_DIR.rglob("*"):
+    for path in scan_root.rglob("*"):
         if path.suffix.lower() not in allowed_suffixes:
             continue
         try:

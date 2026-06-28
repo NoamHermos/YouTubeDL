@@ -7,6 +7,7 @@ const DOWNLOAD_TYPES = new Set(["video", "audio", "srt", "txt"]);
 const FAST_POLL_DELAY_MS = 2000;
 let fastPollTimer = null;
 let pollPromise = null;
+let startQueue = Promise.resolve();
 
 function normalizeServerUrl(rawValue) {
   const raw = (rawValue || "").trim() || DEFAULT_WEB_APP_BASE;
@@ -85,7 +86,7 @@ async function startDownload(rawUrl, downloadType, options = {}) {
   const serverUrl = await getWebAppBase();
   const jobs = await getJobs();
   const entry = {
-    id: `starting-${Date.now()}`,
+    id: `starting-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
     sourceUrl: url,
     title: titleForUrl(url),
     downloadType,
@@ -109,6 +110,7 @@ async function startDownload(rawUrl, downloadType, options = {}) {
         download_type: downloadType,
         workers: 4,
         with_subtitles: Boolean(options.withSubtitles),
+        isolated_outputs: Boolean(options.isolatedOutputs),
       }),
     });
   } catch {
@@ -242,7 +244,9 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     if (options.showPopup) {
       openExtensionPopup();
     }
-    startDownload(message.url, downloadType, options)
+    const startTask = startQueue.then(() => startDownload(message.url, downloadType, options));
+    startQueue = startTask.catch(() => {});
+    startTask
       .then((id) => sendResponse({ok: true, id}))
       .catch((error) => sendResponse({ok: false, error: error.message}));
     return true;
