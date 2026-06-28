@@ -66,6 +66,17 @@ async function notifyJobsChanged() {
   chrome.runtime.sendMessage({type: "jobs-updated", jobs}).catch(() => {});
 }
 
+async function openExtensionPopup() {
+  if (!chrome.action?.openPopup) {
+    return;
+  }
+  try {
+    await chrome.action.openPopup();
+  } catch {
+    // Some Chrome versions only allow this from direct extension gestures.
+  }
+}
+
 async function startDownload(rawUrl, downloadType, options = {}) {
   if (!DOWNLOAD_TYPES.has(downloadType)) {
     throw new Error("Unsupported download type.");
@@ -227,7 +238,11 @@ chrome.alarms.onAlarm.addListener((alarm) => {
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message?.type === "start-download" || message?.type === "start-txt-download") {
     const downloadType = message.downloadType || "txt";
-    startDownload(message.url, downloadType, message.options || {})
+    const options = message.options || {};
+    if (options.showPopup) {
+      openExtensionPopup();
+    }
+    startDownload(message.url, downloadType, options)
       .then((id) => sendResponse({ok: true, id}))
       .catch((error) => sendResponse({ok: false, error: error.message}));
     return true;

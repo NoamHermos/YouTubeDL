@@ -64,6 +64,7 @@
         type: "start-download",
         downloadType,
         url: currentYouTubeUrl(),
+        options: {showPopup: true},
       });
       showButtonResult(button, result, "Added", defaultText);
     } catch (error) {
@@ -147,7 +148,12 @@
       button.disabled = true;
       button.textContent = "...";
       try {
-        const result = await chrome.runtime.sendMessage({type: "start-download", downloadType: "txt", url: videoUrl});
+        const result = await chrome.runtime.sendMessage({
+          type: "start-download",
+          downloadType: "txt",
+          url: videoUrl,
+          options: {showPopup: true},
+        });
         showButtonResult(button, result, "Added", "TXT");
       } catch (error) {
         showButtonResult(button, {error: error.message}, "Added", "TXT");
