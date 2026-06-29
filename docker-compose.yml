@@ -4,6 +4,9 @@ services:
     container_name: youtube-downloader-web
     ports:
       - "8080:8080"
+    environment:
+      DOWNLOAD_RETENTION_DAYS: ${DOWNLOAD_RETENTION_DAYS:-10}
+      CLEANUP_INTERVAL_HOURS: ${CLEANUP_INTERVAL_HOURS:-24}
     volumes:
       - ${HOST_DOWNLOADS_DIR:-./downloads}:/app/downloads
       # Optional: create cookies.txt next to this file, then uncomment this line.

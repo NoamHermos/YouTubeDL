@@ -17,6 +17,7 @@ or that is available under a license that allows downloading.
 - View live job logs with a single updating progress line and download speed.
 - Download completed files from the browser.
 - Delete selected downloaded files, or clear the listed downloads.
+- Automatically clean downloaded files older than 10 days.
 - Open the web UI directly from YouTube using the included browser extension.
 - Run locally with Python or package as a Docker container.
 
@@ -56,6 +57,16 @@ HOST_DOWNLOADS_DIR=/volume1/YouTubeDL/downloads
 
 Then redeploy the stack. The container will still see the folder as
 `/app/downloads`.
+
+Downloaded files are cleaned automatically after 10 days. To change that in
+Docker, set these environment variables in `.env` or Portainer:
+
+```env
+DOWNLOAD_RETENTION_DAYS=10
+CLEANUP_INTERVAL_HOURS=24
+```
+
+Set `DOWNLOAD_RETENTION_DAYS=0` to disable automatic cleanup.
 
 ## YouTube Browser Extension
 
@@ -164,6 +175,8 @@ Web package:
 - `youtube_downloader_web/routes.py` - HTTP routes and JSON API endpoints.
 - `youtube_downloader_web/job_service.py` - job state, subprocess handling, live
   log streaming, cancellation, and output detection.
+- `youtube_downloader_web/cleanup_service.py` - scheduled cleanup for old
+  downloaded files.
 - `youtube_downloader_web/file_service.py` - downloaded file listing, safe path
   resolution, open file, reveal in folder, and clipboard copy.
 - `youtube_downloader_web/format_service.py` - video information lookup and

@@ -5,7 +5,9 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUTF8=1 \
     PORT=8080 \
     DOWNLOADS_DIR=/app/downloads \
-    COOKIE_FILE=/app/cookies.txt
+    COOKIE_FILE=/app/cookies.txt \
+    DOWNLOAD_RETENTION_DAYS=10 \
+    CLEANUP_INTERVAL_HOURS=24
 
 WORKDIR /app
 
