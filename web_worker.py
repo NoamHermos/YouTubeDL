@@ -190,6 +190,51 @@ def create_playlist_zip(target_dir: Path, downloads_dir: Path, title: str) -> Pa
     return archive_path
 
 
+def find_playlist_txt_file(target_dir: Path, index: int) -> Path | None:
+    prefix = f"{index:02d} - "
+    txt_files = [path for path in target_dir.glob(f"{prefix}*.txt") if path.is_file()]
+    if not txt_files:
+        return None
+    return max(txt_files, key=lambda path: path.stat().st_mtime)
+
+
+def create_combined_playlist_txt(target_dir: Path, title: str, indexed_entries: list[tuple[int, dict]]) -> Path | None:
+    combined_path = target_dir / f"COMBINED - {title}.txt"
+    blocks = []
+    if combined_path.exists():
+        try:
+            combined_path.unlink()
+        except OSError:
+            pass
+
+    for zero_based_index, entry in indexed_entries:
+        index = zero_based_index + 1
+        txt_path = find_playlist_txt_file(target_dir, index)
+        if not txt_path:
+            continue
+
+        raw_title = (entry.get("title") or f"Video {index}").strip()
+        try:
+            text = txt_path.read_text(encoding="utf-8").strip()
+        except UnicodeDecodeError:
+            text = txt_path.read_text(encoding="utf-8-sig").strip()
+        except OSError as exc:
+            print(f"   ⚠️ Could not read TXT for combined file: {txt_path.name} ({exc})", flush=True)
+            continue
+
+        if text:
+            blocks.append(f"{index}. {raw_title}\n{'=' * 80}\n{text}")
+
+    if not blocks:
+        print("\n📄 No TXT files available for combined playlist transcript.", flush=True)
+        return None
+
+    combined_path.write_text("\n\n\n".join(blocks) + "\n", encoding="utf-8")
+    size_kb = combined_path.stat().st_size / 1024
+    print(f"\n📄 Created combined TXT transcript: {combined_path.name} ({size_kb:.1f} KB)", flush=True)
+    return combined_path
+
+
 def run_job(args: argparse.Namespace) -> int:
     cookie_file = Path(args.cookie_file)
     cookie_arg = str(cookie_file) if cookie_file.is_file() else None
@@ -280,6 +325,8 @@ def run_job(args: argparse.Namespace) -> int:
     print_summary(title, stats, av_choice in ["3", "4"])
 
     if is_playlist:
+        if av_choice == "4":
+            create_combined_playlist_txt(target_dir, title, indexed_entries)
         create_playlist_zip(target_dir, downloads_dir, title)
 
     failures = [stat for stat in stats if "Failed" in stat["status"] or "No subtitles" in stat["status"]]

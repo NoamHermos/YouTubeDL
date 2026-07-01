@@ -12,6 +12,8 @@ or that is available under a license that allows downloading.
 - Download MP3 audio, with optional subtitles.
 - Download fixed SRT subtitles.
 - Download TXT transcripts as continuous text.
+- Download playlist TXT transcripts as a ZIP with individual TXT files and a
+  combined transcript file.
 - Choose video quality from the same cleaned quality list used by the CLI.
 - Use a saved worker count for future browser sessions. The default is 4 workers.
 - View live job logs with a single updating progress line and download speed.
