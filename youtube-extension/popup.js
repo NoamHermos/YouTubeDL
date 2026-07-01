@@ -46,6 +46,17 @@ async function saveWebAppBase() {
   }
 }
 
+async function openApp() {
+  try {
+    const normalized = normalizeServerUrl(serverUrlInput.value);
+    await chrome.storage.sync.set({[SERVER_URL_KEY]: normalized});
+    serverUrlInput.value = normalized;
+    await chrome.tabs.create({url: normalized});
+  } catch (error) {
+    statusEl.textContent = error.message;
+  }
+}
+
 function cleanYouTubeUrl(rawUrl) {
   const url = new URL(rawUrl);
   if (url.pathname === "/watch" && url.searchParams.get("v")) {
@@ -104,6 +115,7 @@ async function startDownload(downloadType) {
 }
 
 document.querySelector("#save-server").addEventListener("click", saveWebAppBase);
+document.querySelector("#open-app").addEventListener("click", openApp);
 document.querySelectorAll("[data-download-type]").forEach((button) => {
   button.addEventListener("click", () => startDownload(button.dataset.downloadType));
 });

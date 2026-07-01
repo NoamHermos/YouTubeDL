@@ -87,8 +87,9 @@ of each YouTube video thumbnail, including home, search, and suggested video
 cards. Thumbnail TXT buttons create a transcript job without opening a new tab.
 When a YouTube page button starts a job, the extension popup opens to show the
 download queue. The extension popup accepts a YouTube video URL and has separate
-MP4, MP3, and TXT buttons with a compact download queue. When a job finishes,
-Chrome downloads the file immediately.
+MP4, MP3, and TXT buttons, an `Open App` shortcut to the full web UI, and a
+compact download queue. When a job finishes, Chrome downloads the file
+immediately.
 
 Keep the downloader server running at:
 

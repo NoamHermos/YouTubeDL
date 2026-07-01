@@ -74,6 +74,12 @@ button.secondary {
   color: #17202a;
 }
 
+.server-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+
 .download-actions {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
