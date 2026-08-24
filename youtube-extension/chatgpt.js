@@ -9,6 +9,15 @@
     "button[aria-label='שלח']",
     "form button[type='submit']",
   ];
+  const ATTACHMENT_BUSY_SELECTOR = [
+    "[aria-busy='true']",
+    "[role='progressbar']",
+    "[data-state='loading']",
+    "[data-state='pending']",
+    "[data-testid*='progress']",
+    "[data-testid*='loading']",
+    "[data-testid*='spinner']",
+  ].join(", ");
   let activeSubmission = null;
 
   function waitFor(check, timeoutMs = 30000, intervalMs = 200) {
@@ -68,8 +77,83 @@
     } else {
       input.files = transfer.files;
     }
+    if (input.files?.length !== 1 || input.files[0]?.name !== file.name) {
+      throw new Error("ChatGPT did not accept the TXT file selection.");
+    }
     input.dispatchEvent(new Event("input", {bubbles: true, composed: true}));
     input.dispatchEvent(new Event("change", {bubbles: true, composed: true}));
+  }
+
+  function composerRoot(composer) {
+    return composer.closest?.("form")
+      || composer.parentElement?.parentElement?.parentElement
+      || document;
+  }
+
+  function elementDescription(element) {
+    return [
+      element.getAttribute?.("aria-label"),
+      element.getAttribute?.("title"),
+      element.textContent,
+    ].filter(Boolean).join(" ").trim();
+  }
+
+  function findAttachmentCard(root, fileName) {
+    if (!root?.querySelectorAll) return null;
+    const normalizedName = fileName.trim().toLocaleLowerCase();
+    const preferred = root.querySelectorAll([
+      "[role='group'][aria-label]",
+      "[data-testid*='attachment']",
+      "[data-testid*='file']",
+      "[class*='file-tile']",
+    ].join(", "));
+    for (const element of preferred) {
+      if (elementDescription(element).toLocaleLowerCase().includes(normalizedName)) {
+        return element;
+      }
+    }
+
+    // Keep a text fallback for future ChatGPT markup changes, but scope it to
+    // the composer form so an attachment from an older message cannot match.
+    const fallback = root.querySelectorAll("[aria-label], [title], div, span, p");
+    for (let index = fallback.length - 1; index >= 0; index -= 1) {
+      const element = fallback[index];
+      if (elementDescription(element).toLocaleLowerCase().includes(normalizedName)) {
+        return element.closest?.("[role='group'], [class*='file-tile']") || element;
+      }
+    }
+    return null;
+  }
+
+  function attachmentIsReady(card) {
+    if (!card) return false;
+    if (card.matches?.(ATTACHMENT_BUSY_SELECTOR)
+        || card.querySelector?.(ATTACHMENT_BUSY_SELECTOR)) {
+      return false;
+    }
+    const stateText = elementDescription(card).toLocaleLowerCase();
+    return !/(uploading|processing|מעלה|מעבד)/u.test(stateText);
+  }
+
+  async function waitForAttachmentReady(composer, fileName, timeoutMs = 45000) {
+    const root = composerRoot(composer);
+    let readySince = 0;
+    try {
+      return await waitFor(() => {
+        const card = findAttachmentCard(root, fileName);
+        if (!attachmentIsReady(card)) {
+          readySince = 0;
+          return null;
+        }
+        if (!readySince) {
+          readySince = Date.now();
+          return null;
+        }
+        return Date.now() - readySince >= 500 ? card : null;
+      }, timeoutMs, 100);
+    } catch {
+      throw new Error("ChatGPT did not finish attaching the TXT file; the prompt was not sent.");
+    }
   }
 
   function composerText(composer) {
@@ -119,11 +203,17 @@
     const file = new File([bytes], fileName, {type: payload.mimeType || "text/plain"});
 
     attachFile(input, file);
-    await waitFor(() => input.files?.length === 1, 5000);
+    await waitForAttachmentReady(composer, fileName);
     writePrompt(composer, prompt);
     await waitFor(() => composerText(composer).includes(prompt), 5000);
 
-    const sendButton = await waitFor(findSendButton, 45000, 250);
+    const root = composerRoot(composer);
+    const sendButton = await waitFor(() => {
+      if (!attachmentIsReady(findAttachmentCard(root, fileName))) {
+        return null;
+      }
+      return findSendButton();
+    }, 45000, 250);
     sendButton.click();
     await waitFor(() => !composerText(composer), 10000, 200);
     return {ok: true};
@@ -149,6 +239,13 @@
   }
 
   if (typeof module !== "undefined" && module.exports) {
-    module.exports = {decodeBase64, submitTranscript, validatePayload};
+    module.exports = {
+      attachmentIsReady,
+      decodeBase64,
+      findAttachmentCard,
+      submitTranscript,
+      validatePayload,
+      waitForAttachmentReady,
+    };
   }
 })();

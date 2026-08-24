@@ -2,9 +2,12 @@ const assert = require("node:assert/strict");
 const test = require("node:test");
 
 const {
+  attachmentIsReady,
   decodeBase64,
+  findAttachmentCard,
   submitTranscript,
   validatePayload,
+  waitForAttachmentReady,
 } = require("../youtube-extension/chatgpt.js");
 
 test("ChatGPT payload keeps only a safe TXT filename and the requested prompt", () => {
@@ -34,6 +37,60 @@ test("ChatGPT payload decodes UTF-8 transcript bytes without changing them", () 
   assert.deepEqual(Buffer.from(decoded), source);
 });
 
+test("ChatGPT attachment helper requires the matching composer file tile", () => {
+  const readyCard = {
+    getAttribute(name) {
+      return name === "aria-label" ? "transcript.txt" : null;
+    },
+    matches() { return false; },
+    querySelector() { return null; },
+    textContent: "transcript.txt Document",
+  };
+  const unrelatedCard = {
+    ...readyCard,
+    getAttribute(name) {
+      return name === "aria-label" ? "older.txt" : null;
+    },
+    textContent: "older.txt Document",
+  };
+  const root = {
+    querySelectorAll() { return [unrelatedCard, readyCard]; },
+  };
+
+  assert.equal(findAttachmentCard(root, "transcript.txt"), readyCard);
+  assert.equal(attachmentIsReady(readyCard), true);
+});
+
+test("ChatGPT attachment helper waits while the upload is busy", () => {
+  const busyCard = {
+    getAttribute() { return "transcript.txt"; },
+    matches() { return false; },
+    querySelector(selector) {
+      return selector.includes("progressbar") ? {role: "progressbar"} : null;
+    },
+    textContent: "transcript.txt Uploading",
+  };
+
+  assert.equal(attachmentIsReady(busyCard), false);
+});
+
+test("ChatGPT attachment timeout stops before a prompt can be sent", async () => {
+  const originalWindow = global.window;
+  const root = {querySelectorAll() { return []; }};
+  const composer = {closest() { return root; }};
+  global.window = {setTimeout};
+
+  try {
+    await assert.rejects(
+      waitForAttachmentReady(composer, "transcript.txt", 20),
+      /prompt was not sent/,
+    );
+  } finally {
+    if (originalWindow === undefined) delete global.window;
+    else global.window = originalWindow;
+  }
+});
+
 test("ChatGPT page helper attaches the TXT, writes the prompt, and clicks Send", async () => {
   const originalGlobals = {
     DataTransfer: global.DataTransfer,
@@ -47,6 +104,7 @@ test("ChatGPT page helper attaches the TXT, writes the prompt, and clicks Send",
   let sendClicks = 0;
   let inputEvents = 0;
   let attachedFile = null;
+  let attachmentVisible = false;
 
   class MockInput {
     set files(value) {
@@ -55,14 +113,30 @@ test("ChatGPT page helper attaches the TXT, writes the prompt, and clicks Send",
     get files() {
       return this._files || [];
     }
-    dispatchEvent() {
+    dispatchEvent(event) {
       inputEvents += 1;
+      if (event.type === "change") attachmentVisible = true;
     }
   }
   const input = new MockInput();
+  const attachment = {
+    isConnected: true,
+    getAttribute(name) {
+      return name === "aria-label" ? "transcript.txt" : null;
+    },
+    matches() { return false; },
+    querySelector() { return null; },
+    textContent: "transcript.txt Document",
+  };
+  const form = {
+    querySelectorAll() {
+      return attachmentVisible ? [attachment] : [];
+    },
+  };
   const composer = {
     textContent: "",
     get innerText() { return this.textContent; },
+    closest(selector) { return selector === "form" ? form : null; },
     dispatchEvent() { inputEvents += 1; },
     focus() {},
   };
@@ -84,7 +158,9 @@ test("ChatGPT page helper attaches the TXT, writes the prompt, and clicks Send",
         }};
       }
     };
-    global.Event = class {};
+    global.Event = class {
+      constructor(type) { this.type = type; }
+    };
     global.File = class {
       constructor(parts, name, options) {
         this.parts = parts;
