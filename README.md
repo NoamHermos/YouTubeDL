@@ -60,6 +60,12 @@ HOST_DOWNLOADS_DIR=/volume1/YouTubeDL/downloads
 Then redeploy the stack. The container will still see the folder as
 `/app/downloads`.
 
+This setting is important for MP4 downloads. During an `ffmpeg` merge, the
+separate video and audio streams coexist with the final MP4, so the downloads
+volume may temporarily need a little more than twice the final file size. The
+worker checks the available space before starting a merge and reports a clear
+error if the mapped volume is too small.
+
 Downloaded files are cleaned automatically after 10 days. To change that in
 Docker, set these environment variables in `.env` or Portainer:
 
@@ -110,6 +116,11 @@ http://192.168.1.50:8080/
 Click `Save Server` after changing the address. Chrome will ask for one-time
 permission to contact that server; approve it so the extension can start jobs,
 read progress, and download completed TXT files.
+
+The server requires the `X-YouTube-Downloader` request marker used by the
+bundled web UI and extension for state-changing API calls. The custom header
+helps block drive-by requests made by unrelated web pages; it is not identity
+verification or a replacement for authentication outside a trusted LAN.
 
 ## Cookies
 

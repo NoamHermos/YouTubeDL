@@ -20,6 +20,11 @@ const form = document.querySelector("#job-form");
     let currentOutput = null;
     let pollTimer = null;
     const autoDownloadedJobIds = new Set();
+    const terminalJobStatuses = new Set(["finished", "failed"]);
+    const apiHeaders = {
+      "Content-Type": "application/json",
+      "X-YouTube-Downloader": "1",
+    };
 
     function setLog(text) {
       logEl.textContent = text || "";
@@ -120,7 +125,7 @@ const form = document.querySelector("#job-form");
     async function deleteFiles(fileIds) {
       const res = await fetch("/api/files/delete", {
         method: "POST",
-        headers: {"Content-Type": "application/json"},
+        headers: apiHeaders,
         body: JSON.stringify({ids: fileIds})
       });
       const data = await res.json();
@@ -193,7 +198,7 @@ const form = document.querySelector("#job-form");
       try {
         const res = await fetch("/api/formats", {
           method: "POST",
-          headers: {"Content-Type": "application/json"},
+          headers: apiHeaders,
           body: JSON.stringify(payload)
         });
         const data = await res.json();
@@ -220,12 +225,13 @@ const form = document.querySelector("#job-form");
     async function startJobFromForm() {
       const data = Object.fromEntries(new FormData(form).entries());
       data.with_subtitles = ["video", "audio"].includes(form.elements.download_type.value) && form.elements.with_subtitles.checked;
+      data.isolated_outputs = true;
       jobActions.hidden = true;
       currentOutput = null;
       setLog("Starting job...\n");
       const res = await fetch("/api/jobs", {
         method: "POST",
-        headers: {"Content-Type": "application/json"},
+        headers: apiHeaders,
         body: JSON.stringify(data)
       });
       const payload = await res.json();
@@ -248,7 +254,7 @@ const form = document.querySelector("#job-form");
       setLog(job.log.join(""));
       renderJobActions(job);
       cancelButton.hidden = job.status !== "running";
-      if (job.status !== "running") {
+      if (terminalJobStatuses.has(job.status)) {
         clearInterval(pollTimer);
         pollTimer = null;
         await refreshFiles();
@@ -263,7 +269,10 @@ const form = document.querySelector("#job-form");
 
     cancelButton.addEventListener("click", async () => {
       if (!currentJobId) return;
-      await fetch(`/api/jobs/${currentJobId}/cancel`, {method: "POST"});
+      await fetch(`/api/jobs/${currentJobId}/cancel`, {
+        method: "POST",
+        headers: {"X-YouTube-Downloader": "1"},
+      });
       await pollJob();
     });
 

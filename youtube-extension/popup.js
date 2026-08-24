@@ -102,7 +102,12 @@ async function refreshJobs() {
 async function startDownload(downloadType) {
   try {
     const url = cleanYouTubeUrl(youtubeUrlInput.value.trim());
-    const response = await chrome.runtime.sendMessage({type: "start-download", downloadType, url});
+    const response = await chrome.runtime.sendMessage({
+      type: "start-download",
+      downloadType,
+      url,
+      options: {isolatedOutputs: true},
+    });
     if (!response?.ok) {
       throw new Error(response?.error || "Could not start download.");
     }

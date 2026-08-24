@@ -1,10 +1,26 @@
 import yt_dlp
 from yt_dlp.utils import DownloadError
 
-abort_speed_mode = False
+
+class SpeedAbortState:
+    def __init__(self):
+        self.aborted = False
+
+    def check_fail(self, msg):
+        if "Skipping fragment" in msg or "fragment not found" in msg or "HTTP Error 403" in msg:
+            if not self.aborted:
+                print(f"\n🚨 Detected issue in speed mode: '{msg}' - Triggering abort!")
+            self.aborted = True
+
+    def hook(self, _download):
+        if self.aborted:
+            raise DownloadError("ABORT_SPEED_MODE_TRIGGERED")
 
 
 class SpeedLogger:
+    def __init__(self, abort_state):
+        self.abort_state = abort_state
+
     def debug(self, msg): self._check_fail(msg)
     def info(self, msg): 
         self._check_fail(msg)
@@ -17,29 +33,18 @@ class SpeedLogger:
         self._check_fail(msg)
 
     def _check_fail(self, msg):
-        global abort_speed_mode
-        if "Skipping fragment" in msg or "fragment not found" in msg or "HTTP Error 403" in msg:
-            if not abort_speed_mode:
-                print(f"\n🚨 Detected issue in speed mode: '{msg}' - Triggering abort!")
-            abort_speed_mode = True
-
-
-def speed_abort_hook(d):
-    global abort_speed_mode
-    if abort_speed_mode:
-        raise DownloadError("ABORT_SPEED_MODE_TRIGGERED")
+        self.abort_state.check_fail(msg)
 
 
 def run_download_with_fallback(ydl_opts: dict, url: str):
-    global abort_speed_mode
-    
     # 1. Fast Mode
-    abort_speed_mode = False
+    abort_state = SpeedAbortState()
     fast_opts = ydl_opts.copy()
     fast_opts.update(SPEED_OPTS)
+    fast_opts["logger"] = SpeedLogger(abort_state)
     
     existing_hooks = ydl_opts.get("progress_hooks", [])
-    fast_opts["progress_hooks"] = existing_hooks + [speed_abort_hook]
+    fast_opts["progress_hooks"] = existing_hooks + [abort_state.hook]
     
     print(f"🚀 Speed Download: Starting concurrent download...")
     
@@ -49,10 +54,12 @@ def run_download_with_fallback(ydl_opts: dict, url: str):
         return
     except Exception as e:
         err_str = str(e)
-        if "ABORT_SPEED_MODE_TRIGGERED" in err_str or abort_speed_mode:
-            print(f"\n🛑 Speed mode aborted safely (Missing fragments/403 detected).")
-        else:
-            print(f"\n⚠️ Speed Download Failed: {e}")
+        if "ABORT_SPEED_MODE_TRIGGERED" not in err_str and not abort_state.aborted:
+            # A standard retry cannot repair ffmpeg, disk-space, unavailable
+            # video or other deterministic failures. Re-raise instead of doing
+            # the same expensive download and merge a second time.
+            raise
+        print(f"\n🛑 Speed mode aborted safely (Missing fragments/403 detected).")
         print("🐢 Fallback: Switching to standard download mode immediately...\n")
 
     # 2. Standard Mode
@@ -74,6 +81,4 @@ SPEED_OPTS = {
     "concurrent_fragment_downloads": 10,
     "http_chunk_size": 10485760,
     "skip_unavailable_fragments": False,
-    "logger": SpeedLogger(),
-    "progress_hooks": [speed_abort_hook],
 }

@@ -1,4 +1,5 @@
 import os
+import shutil
 import time
 from pathlib import Path
 
@@ -8,6 +9,109 @@ from .captions import get_best_subs_config, has_subtitles_enabled
 from .formats import sanitize_filename
 from .speed import run_download_with_fallback
 from .subtitles import auto_fix_subtitles, cleanup_subtitles, write_txt_from_srt
+
+
+MP4_AUTO_FORMAT = (
+    "bv[ext=mp4]+ba[ext=m4a]/"
+    "bv[ext=mp4]+ba[acodec^=mp4a]/"
+    "b[ext=mp4]/best[ext=mp4]/best"
+)
+
+
+def format_has_audio(fmt: dict) -> bool:
+    acodec = (fmt.get("acodec") or "none").lower()
+    return acodec != "none"
+
+
+def build_video_format_selector(formats: list[dict], preferred_format_id: str | None) -> str:
+    preferred_id = str(preferred_format_id or "best")
+    if preferred_id == "best":
+        return MP4_AUTO_FORMAT
+
+    selected = next(
+        (fmt for fmt in formats if str(fmt.get("format_id")) == preferred_id),
+        None,
+    )
+    if not selected:
+        return MP4_AUTO_FORMAT
+    if format_has_audio(selected):
+        return preferred_id
+    return (
+        f"{preferred_id}+ba[ext=m4a]/"
+        f"{preferred_id}+ba[acodec^=mp4a]/"
+        f"{preferred_id}"
+    )
+
+
+def format_size_bytes(fmt: dict | None) -> int:
+    if not fmt:
+        return 0
+    raw_size = fmt.get("filesize") or fmt.get("filesize_approx") or 0
+    try:
+        return max(0, int(raw_size))
+    except (TypeError, ValueError):
+        return 0
+
+
+def estimate_mp4_working_bytes(formats: list[dict], preferred_format_id: str | None) -> int | None:
+    preferred_id = str(preferred_format_id or "best")
+    selected = next(
+        (fmt for fmt in formats if str(fmt.get("format_id")) == preferred_id),
+        None,
+    )
+    if selected is None or preferred_id == "best":
+        candidates = [
+            fmt for fmt in formats
+            if (fmt.get("ext") or "").lower() == "mp4"
+            and (fmt.get("vcodec") or "none").lower() != "none"
+        ]
+        if not candidates:
+            return None
+        selected = max(
+            candidates,
+            key=lambda fmt: (
+                fmt.get("height") or 0,
+                fmt.get("fps") or 0,
+                fmt.get("tbr") or 0,
+            ),
+        )
+
+    video_bytes = format_size_bytes(selected)
+    if not video_bytes:
+        return None
+    if format_has_audio(selected):
+        return int(video_bytes * 1.2)
+
+    audio_candidates = [
+        fmt for fmt in formats
+        if (fmt.get("vcodec") or "none").lower() == "none"
+        and (fmt.get("acodec") or "none").lower() != "none"
+        and (
+            (fmt.get("ext") or "").lower() == "m4a"
+            or (fmt.get("acodec") or "").lower().startswith("mp4a")
+        )
+    ]
+    audio_bytes = max((format_size_bytes(fmt) for fmt in audio_candidates), default=0)
+    # During an ffmpeg merge the video, audio and final MP4 coexist. Keep a
+    # little extra room for container overhead and temporary files.
+    return int((video_bytes + audio_bytes) * 2.2)
+
+
+def ensure_mp4_working_space(target_dir: Path, formats: list[dict], preferred_format_id: str | None) -> None:
+    available_bytes = shutil.disk_usage(target_dir).free
+    estimated_bytes = estimate_mp4_working_bytes(formats, preferred_format_id)
+    available_gb = available_bytes / (1024 ** 3)
+    print(f"Available disk space for MP4 processing: {available_gb:.1f} GB")
+    if estimated_bytes is None or available_bytes >= estimated_bytes:
+        return
+
+    required_gb = estimated_bytes / (1024 ** 3)
+    raise RuntimeError(
+        "Not enough free disk space to merge this MP4. "
+        f"Approximately {required_gb:.1f} GB is required, but only "
+        f"{available_gb:.1f} GB is available. Configure HOST_DOWNLOADS_DIR "
+        "to a large NAS volume and try again."
+    )
 
 
 class DownloadTracker:
@@ -159,32 +263,19 @@ def process_video(i, entry, is_playlist, cookie_arg, target_dir, av_choice, pref
             full_info = ydl_meta.extract_info(vid_url, download=False)
         
         # 2. Smart Quality Logic
-        current_formats = [f['format_id'] for f in full_info.get('formats', [])] if not subtitle_only else []
+        available_formats = full_info.get("formats", []) if not subtitle_only else []
+        current_formats = {str(fmt.get("format_id")) for fmt in available_formats}
         final_format_str = ""
         
         if subtitle_only:
             final_format_str = None
         elif av_choice == "2": 
             final_format_str = preferred_format_id if preferred_format_id in current_formats else "bestaudio/best"
-        else: 
-            mp4_best_format = (
-                "bv*[ext=mp4]+ba[ext=m4a]/"
-                "bv*[ext=mp4]+ba[acodec^=mp4a]/"
-                "b[ext=mp4]/best[ext=mp4]/best"
-            )
-            # Check if Best Quality (Auto) is selected
-            if preferred_format_id == "best":
-                final_format_str = mp4_best_format
-            # Normal check for specific quality
-            elif preferred_format_id in current_formats:
-                final_format_str = (
-                    f"{preferred_format_id}+ba[ext=m4a]/"
-                    f"{preferred_format_id}+ba[acodec^=mp4a]/"
-                    f"{preferred_format_id}"
-                )
-            else:
+        else:
+            if preferred_format_id != "best" and str(preferred_format_id) not in current_formats:
                 print(f"   ⚠️ Preferred format {preferred_format_id} not available. Falling back to 'best'.")
-                final_format_str = mp4_best_format
+            final_format_str = build_video_format_selector(available_formats, preferred_format_id)
+            ensure_mp4_working_space(target_dir, available_formats, preferred_format_id)
 
         # 3. Smart Subtitle Logic
         subs_config = get_best_subs_config(full_info, want_subs)

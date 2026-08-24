@@ -138,6 +138,7 @@
     const button = document.createElement("button");
     button.type = "button";
     button.className = "ytdl-txt-thumbnail-button";
+    button.dataset.videoUrl = videoUrl;
     button.textContent = "TXT";
     button.title = "Download transcript as TXT";
     button.setAttribute("aria-label", button.title);
@@ -145,13 +146,20 @@
       button.addEventListener(eventName, stopThumbnailNavigation);
     });
     button.addEventListener("click", async () => {
+      // YouTube reuses result-card DOM nodes while navigating and scrolling.
+      // Read the URL from the button at click time instead of closing over the
+      // URL that the card had when this button was first created.
+      const currentVideoUrl = button.dataset.videoUrl;
       button.disabled = true;
       button.textContent = "...";
       try {
+        if (!currentVideoUrl) {
+          throw new Error("Could not find the video URL.");
+        }
         const result = await chrome.runtime.sendMessage({
           type: "start-download",
           downloadType: "txt",
-          url: videoUrl,
+          url: currentVideoUrl,
           options: {showPopup: true, isolatedOutputs: true},
         });
         showButtonResult(button, result, "Added", "TXT");
@@ -216,9 +224,15 @@
       if (!videoUrl || !host || !container) {
         return;
       }
-      if (container.querySelector(BUTTON_SELECTOR)) {
+      const existingButton = container.querySelector(BUTTON_SELECTOR);
+      if (existingButton) {
         pruneDuplicateTextButtons(container);
+        existingButton.dataset.videoUrl = videoUrl;
         container.dataset.ytdlTxtInjected = videoUrl;
+        host.classList.add("ytdl-thumbnail-host");
+        if (!host.contains(existingButton)) {
+          host.appendChild(existingButton);
+        }
         return;
       }
       if (container.dataset.ytdlTxtInjected === videoUrl) {
@@ -244,6 +258,8 @@
   document.addEventListener("yt-navigate-finish", scheduleInject);
   new MutationObserver(scheduleInject).observe(document.documentElement, {
     childList: true,
-    subtree: true
+    subtree: true,
+    attributes: true,
+    attributeFilter: ["href"]
   });
 })();

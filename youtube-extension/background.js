@@ -103,7 +103,10 @@ async function startDownload(rawUrl, downloadType, options = {}) {
   try {
     response = await fetch(new URL("api/jobs", serverUrl), {
       method: "POST",
-      headers: {"Content-Type": "application/json"},
+      headers: {
+        "Content-Type": "application/json",
+        "X-YouTube-Downloader": "1",
+      },
       body: JSON.stringify({
         url,
         source: "single",
