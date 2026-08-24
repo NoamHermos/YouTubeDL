@@ -5,6 +5,10 @@ const POLL_ALARM = "poll-txt-downloads";
 const MAX_SAVED_JOBS = 12;
 const DOWNLOAD_TYPES = new Set(["video", "audio", "srt", "txt"]);
 const FAST_POLL_DELAY_MS = 2000;
+const CHATGPT_URL = "https://chatgpt.com/";
+const CHATGPT_PROMPT = "סכם את הסרטון";
+const CHATGPT_MAX_FILE_BYTES = 8 * 1024 * 1024;
+const CHATGPT_READY_TIMEOUT_MS = 30000;
 let fastPollTimer = null;
 let pollPromise = null;
 let startQueue = Promise.resolve();
@@ -144,6 +148,81 @@ function downloadUrl(serverUrl, file) {
   return new URL(file.url || `files/${encodeURIComponent(file.name)}`, serverUrl).toString();
 }
 
+function outputFileName(file) {
+  return (file.name || "download.txt").split("/").pop();
+}
+
+function transcriptOutput(outputs) {
+  return (outputs || []).find((file) => outputFileName(file).toLowerCase().endsWith(".txt"));
+}
+
+function bytesToBase64(bytes) {
+  let binary = "";
+  const chunkSize = 0x8000;
+  for (let offset = 0; offset < bytes.length; offset += chunkSize) {
+    binary += String.fromCharCode(...bytes.subarray(offset, offset + chunkSize));
+  }
+  return btoa(binary);
+}
+
+async function loadTranscriptPayload(serverUrl, file) {
+  const fileUrl = downloadUrl(serverUrl, file);
+  const response = await fetch(fileUrl, {cache: "no-store"});
+  if (!response.ok) {
+    throw new Error(`Could not read the TXT file (${response.status}).`);
+  }
+
+  const buffer = await response.arrayBuffer();
+  if (buffer.byteLength > CHATGPT_MAX_FILE_BYTES) {
+    throw new Error("The TXT file is too large for automatic ChatGPT attachment.");
+  }
+
+  return {
+    fileBase64: bytesToBase64(new Uint8Array(buffer)),
+    fileName: outputFileName(file),
+    mimeType: "text/plain",
+    prompt: CHATGPT_PROMPT,
+  };
+}
+
+function delay(milliseconds) {
+  return new Promise((resolve) => setTimeout(resolve, milliseconds));
+}
+
+async function openChatGPTAndSubmit(payload) {
+  const tab = await chrome.tabs.create({url: CHATGPT_URL, active: true});
+  if (!Number.isInteger(tab.id)) {
+    throw new Error("ChatGPT tab could not be opened.");
+  }
+
+  const deadline = Date.now() + CHATGPT_READY_TIMEOUT_MS;
+  let lastError = "ChatGPT did not become ready.";
+  while (Date.now() < deadline) {
+    try {
+      const result = await chrome.tabs.sendMessage(tab.id, {
+        type: "submit-txt-summary",
+        ...payload,
+      });
+      if (result?.ok) {
+        return;
+      }
+      lastError = result?.error || lastError;
+      if (!result?.retry) {
+        break;
+      }
+    } catch (error) {
+      lastError = error.message || lastError;
+    }
+    await delay(750);
+  }
+  throw new Error(lastError);
+}
+
+async function sendTranscriptToChatGPT(entry, file) {
+  const payload = await loadTranscriptPayload(entry.serverUrl, file);
+  await openChatGPTAndSubmit(payload);
+}
+
 async function pollJobs() {
   if (pollPromise) {
     return pollPromise;
@@ -184,12 +263,29 @@ async function pollJobsInternal() {
         for (const file of job.outputs || []) {
           await chrome.downloads.download({
             url: downloadUrl(entry.serverUrl, file),
-            filename: (file.name || "download.txt").split("/").pop(),
+            filename: outputFileName(file),
             conflictAction: "uniquify",
             saveAs: false,
           });
         }
         entry.status = "downloaded";
+        if (entry.downloadType === "txt") {
+          const txtFile = transcriptOutput(job.outputs);
+          if (!txtFile) {
+            entry.error = "TXT downloaded, but no transcript was available to send to ChatGPT.";
+          } else {
+            entry.status = "sending-to-chatgpt";
+            await saveJobs(jobs);
+            await notifyJobsChanged();
+            try {
+              await sendTranscriptToChatGPT(entry, txtFile);
+              entry.status = "sent-to-chatgpt";
+            } catch (error) {
+              entry.status = "downloaded";
+              entry.error = `TXT downloaded. ChatGPT send failed: ${error.message}`;
+            }
+          }
+        }
       } else if (job.status === "failed") {
         entry.error = `The server could not create the ${(entry.downloadType || "file").toUpperCase()} file.`;
       }

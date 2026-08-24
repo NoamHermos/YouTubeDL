@@ -94,6 +94,9 @@
       button.type = "button";
       button.className = "ytdl-local-button";
       button.textContent = text;
+      if (item.type === "txt") {
+        button.title = "Download TXT, attach it to ChatGPT, and send a summary prompt";
+      }
       button.addEventListener("click", () => startExtensionDownload(item.type, button, text));
       toolbar.appendChild(button);
     }
@@ -140,7 +143,7 @@
     button.className = "ytdl-txt-thumbnail-button";
     button.dataset.videoUrl = videoUrl;
     button.textContent = "TXT";
-    button.title = "Download transcript as TXT";
+    button.title = "Download TXT and send it to ChatGPT for summarization";
     button.setAttribute("aria-label", button.title);
     ["pointerdown", "mousedown", "mouseup", "click"].forEach((eventName) => {
       button.addEventListener(eventName, stopThumbnailNavigation);
@@ -169,7 +172,7 @@
       window.setTimeout(() => {
         button.disabled = false;
         button.textContent = "TXT";
-        button.title = "Download transcript as TXT";
+        button.title = "Download TXT and send it to ChatGPT for summarization";
       }, 2400);
     });
     return button;

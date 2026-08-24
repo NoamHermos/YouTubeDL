@@ -97,7 +97,16 @@ When a YouTube page button starts a job, the extension popup opens to show the
 download queue. The extension popup accepts a YouTube video URL and has separate
 MP4, MP3, and TXT buttons, an `Open App` shortcut to the full web UI, and a
 compact download queue. When a job finishes, Chrome downloads the file
-immediately.
+immediately. Completed TXT jobs also open a new `chatgpt.com` chat, attach the
+transcript, enter the Hebrew prompt `סכם את הסרטון`, and click Send. You must be
+signed in to ChatGPT in the same browser profile. Because this integration uses
+the ChatGPT web interface, a future ChatGPT UI change may require updating the
+extension selectors.
+
+Pressing any TXT button intentionally sends the generated transcript to ChatGPT.
+Only use it for transcripts that you are allowed to download and share with that
+service. If ChatGPT cannot be opened or the attachment cannot be submitted, the
+local TXT download is kept and the extension queue shows the ChatGPT error.
 
 Keep the downloader server running at:
 
@@ -116,6 +125,10 @@ http://192.168.1.50:8080/
 Click `Save Server` after changing the address. Chrome will ask for one-time
 permission to contact that server; approve it so the extension can start jobs,
 read progress, and download completed TXT files.
+
+After installing or updating version 1.2.0, reload the unpacked extension and
+approve access to `chatgpt.com`. Existing ChatGPT tabs should also be refreshed
+once so the attachment helper is available there.
 
 The server requires the `X-YouTube-Downloader` request marker used by the
 bundled web UI and extension for state-changing API calls. The custom header
@@ -205,9 +218,11 @@ Browser extension:
 
 - `youtube-extension/manifest.json` - Chrome/Edge Manifest V3 configuration.
 - `youtube-extension/background.js` - extension job queue, server polling, and
-  browser download handling.
+  browser download handling, including opening ChatGPT for completed TXT jobs.
 - `youtube-extension/content.js` / `content.css` - YouTube toolbar controls and
   TXT buttons injected onto YouTube video thumbnails.
+- `youtube-extension/chatgpt.js` - attaches completed TXT transcripts to a new
+  ChatGPT chat, enters the summary prompt, and submits it.
 - `youtube-extension/popup.html` / `popup.js` / `popup.css` - compact URL input,
   server configuration, and download progress UI.
 - `youtube-extension/logo.png` and `youtube-extension/icons/` - extension logo

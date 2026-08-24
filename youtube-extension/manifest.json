@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "Local YouTube Downloader",
-  "version": "1.1.2",
-  "description": "Send YouTube MP4, MP3, SRT, and TXT downloads to your configured downloader server.",
+  "version": "1.2.0",
+  "description": "Download YouTube media and send completed TXT transcripts to ChatGPT for summarization.",
   "permissions": ["alarms", "downloads", "storage"],
   "icons": {
     "16": "icons/icon16.png",
@@ -13,6 +13,7 @@
   "host_permissions": [
     "https://www.youtube.com/*",
     "https://youtube.com/*",
+    "https://chatgpt.com/*",
     "http://127.0.0.1:8080/*",
     "http://localhost:8080/*"
   ],
@@ -50,6 +51,11 @@
       ],
       "js": ["content.js"],
       "css": ["content.css"],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": ["https://chatgpt.com/*"],
+      "js": ["chatgpt.js"],
       "run_at": "document_idle"
     }
   ]

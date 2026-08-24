@@ -111,7 +111,9 @@ async function startDownload(downloadType) {
     if (!response?.ok) {
       throw new Error(response?.error || "Could not start download.");
     }
-    statusEl.textContent = `${downloadType.toUpperCase()} download added.`;
+    statusEl.textContent = downloadType === "txt"
+      ? "TXT download added. It will be sent to ChatGPT automatically."
+      : `${downloadType.toUpperCase()} download added.`;
     youtubeUrlInput.value = "";
     await refreshJobs();
   } catch (error) {
