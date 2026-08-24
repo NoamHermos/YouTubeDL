@@ -1,3 +1,7 @@
+if (typeof importScripts === "function") {
+  importScripts("chatgpt.js");
+}
+
 const DEFAULT_WEB_APP_BASE = "http://127.0.0.1:8080/";
 const SERVER_URL_KEY = "webAppBase";
 const JOBS_KEY = "txtDownloadJobs";
@@ -199,15 +203,18 @@ async function openChatGPTAndSubmit(payload) {
   let lastError = "ChatGPT did not become ready.";
   while (Date.now() < deadline) {
     try {
-      const result = await chrome.tabs.sendMessage(tab.id, {
-        type: "submit-txt-summary",
-        ...payload,
+      const injections = await chrome.scripting.executeScript({
+        target: {tabId: tab.id},
+        world: "MAIN",
+        func: submitTranscriptInChatGPTPage,
+        args: [payload],
       });
+      const result = injections?.[0]?.result;
       if (result?.ok) {
         return;
       }
       lastError = result?.error || lastError;
-      if (!result?.retry) {
+      if (result && !result.retry) {
         break;
       }
     } catch (error) {

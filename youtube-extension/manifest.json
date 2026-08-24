@@ -1,9 +1,9 @@
 {
   "manifest_version": 3,
   "name": "Local YouTube Downloader",
-  "version": "1.2.1",
+  "version": "1.2.2",
   "description": "Download YouTube media and send completed TXT transcripts to ChatGPT for summarization.",
-  "permissions": ["alarms", "downloads", "storage"],
+  "permissions": ["alarms", "downloads", "scripting", "storage"],
   "icons": {
     "16": "icons/icon16.png",
     "32": "icons/icon32.png",
@@ -51,11 +51,6 @@
       ],
       "js": ["content.js"],
       "css": ["content.css"],
-      "run_at": "document_idle"
-    },
-    {
-      "matches": ["https://chatgpt.com/*"],
-      "js": ["chatgpt.js"],
       "run_at": "document_idle"
     }
   ]

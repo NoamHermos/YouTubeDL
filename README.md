@@ -101,8 +101,10 @@ immediately. Completed TXT jobs also open a new `chatgpt.com` chat, attach the
 transcript, enter the Hebrew prompt `סכם את הסרטון`, and click Send. You must be
 signed in to ChatGPT in the same browser profile. Because this integration uses
 the ChatGPT web interface, a future ChatGPT UI change may require updating the
-extension selectors. The prompt is not entered or sent until ChatGPT displays
-the transcript attachment and its upload indicator has finished.
+extension selectors. The attachment helper runs in ChatGPT's page context so
+the site's upload handler receives a native page `File` and `change` event. The
+prompt is not entered or sent until ChatGPT displays the transcript attachment
+and its upload indicator has finished.
 
 Pressing any TXT button intentionally sends the generated transcript to ChatGPT.
 Only use it for transcripts that you are allowed to download and share with that
@@ -127,7 +129,7 @@ Click `Save Server` after changing the address. Chrome will ask for one-time
 permission to contact that server; approve it so the extension can start jobs,
 read progress, and download completed TXT files.
 
-After installing or updating version 1.2.1, reload the unpacked extension and
+After installing or updating version 1.2.2, reload the unpacked extension and
 approve access to `chatgpt.com`. Existing ChatGPT tabs should also be refreshed
 once so the attachment helper is available there.
 

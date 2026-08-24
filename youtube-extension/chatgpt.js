@@ -1,5 +1,4 @@
-(function () {
-  const MESSAGE_TYPE = "submit-txt-summary";
+async function submitTranscriptInChatGPTPage(payload) {
   const COMPOSER_SELECTOR = "#prompt-textarea, [contenteditable='true'][role='textbox']";
   const FILE_INPUT_SELECTOR = "#upload-files, input[type='file']:not([accept='image/*'])";
   const SEND_BUTTON_SELECTORS = [
@@ -18,7 +17,6 @@
     "[data-testid*='loading']",
     "[data-testid*='spinner']",
   ].join(", ");
-  let activeSubmission = null;
 
   function waitFor(check, timeoutMs = 30000, intervalMs = 200) {
     const deadline = Date.now() + timeoutMs;
@@ -44,15 +42,15 @@
     });
   }
 
-  function validatePayload(payload) {
-    if (!payload || typeof payload.fileBase64 !== "string" || !payload.fileBase64) {
+  function validatePayload(value) {
+    if (!value || typeof value.fileBase64 !== "string" || !value.fileBase64) {
       throw new Error("The TXT file data is missing.");
     }
-    const fileName = String(payload.fileName || "transcript.txt").split(/[\\/]/).pop();
+    const fileName = String(value.fileName || "transcript.txt").split(/[\\/]/).pop();
     if (!fileName.toLowerCase().endsWith(".txt")) {
       throw new Error("Only TXT transcripts can be sent automatically.");
     }
-    const prompt = String(payload.prompt || "").trim();
+    const prompt = String(value.prompt || "").trim();
     if (!prompt) {
       throw new Error("The summary prompt is missing.");
     }
@@ -113,8 +111,6 @@
       }
     }
 
-    // Keep a text fallback for future ChatGPT markup changes, but scope it to
-    // the composer form so an attachment from an older message cannot match.
     const fallback = root.querySelectorAll("[aria-label], [title], div, span, p");
     for (let index = fallback.length - 1; index >= 0; index -= 1) {
       const element = fallback[index];
@@ -195,15 +191,22 @@
     return null;
   }
 
-  async function submitTranscript(payload) {
+  try {
     const {fileName, prompt} = validatePayload(payload);
     const composer = await waitFor(() => document.querySelector(COMPOSER_SELECTOR));
     const input = await waitFor(() => document.querySelector(FILE_INPUT_SELECTOR));
     const bytes = decodeBase64(payload.fileBase64);
     const file = new File([bytes], fileName, {type: payload.mimeType || "text/plain"});
 
+    // This function is injected into the page's MAIN world. Creating File,
+    // DataTransfer, and the events here keeps them in ChatGPT's own realm.
     attachFile(input, file);
     await waitForAttachmentReady(composer, fileName);
+
+    if (payload.autoSend === false) {
+      return {ok: true, attached: true, sent: false};
+    }
+
     writePrompt(composer, prompt);
     await waitFor(() => composerText(composer).includes(prompt), 5000);
 
@@ -216,36 +219,12 @@
     }, 45000, 250);
     sendButton.click();
     await waitFor(() => !composerText(composer), 10000, 200);
-    return {ok: true};
+    return {ok: true, attached: true, sent: true};
+  } catch (error) {
+    return {ok: false, error: error?.message || "ChatGPT attachment failed."};
   }
+}
 
-  if (typeof chrome !== "undefined" && chrome.runtime?.onMessage) {
-    chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-      if (message?.type !== MESSAGE_TYPE || sender.id !== chrome.runtime.id) {
-        return undefined;
-      }
-      if (activeSubmission) {
-        sendResponse({ok: false, retry: true, error: "ChatGPT is already preparing a transcript."});
-        return undefined;
-      }
-      activeSubmission = submitTranscript(message)
-        .then(() => sendResponse({ok: true}))
-        .catch((error) => sendResponse({ok: false, error: error.message}))
-        .finally(() => {
-          activeSubmission = null;
-        });
-      return true;
-    });
-  }
-
-  if (typeof module !== "undefined" && module.exports) {
-    module.exports = {
-      attachmentIsReady,
-      decodeBase64,
-      findAttachmentCard,
-      submitTranscript,
-      validatePayload,
-      waitForAttachmentReady,
-    };
-  }
-})();
+if (typeof module !== "undefined" && module.exports) {
+  module.exports = {submitTranscriptInChatGPTPage};
+}

@@ -6,7 +6,7 @@ const vm = require("node:vm");
 
 function loadBackground(overrides = {}) {
   const listeners = {};
-  const calls = {createdTabs: [], messages: []};
+  const calls = {createdTabs: [], injections: []};
   const chrome = {
     action: {openPopup: async () => {}},
     alarms: {
@@ -21,6 +21,12 @@ function loadBackground(overrides = {}) {
       onStartup: {addListener(callback) { listeners.startup = callback; }},
       sendMessage: async () => {},
     },
+    scripting: {
+      async executeScript(options) {
+        calls.injections.push(options);
+        return [{frameId: 0, result: {ok: true, attached: true, sent: true}}];
+      },
+    },
     storage: {
       local: {get: async () => ({txtDownloadJobs: []}), set: async () => {}},
       sync: {get: async () => ({})},
@@ -29,10 +35,6 @@ function loadBackground(overrides = {}) {
       async create(options) {
         calls.createdTabs.push(options);
         return {id: 42};
-      },
-      async sendMessage(tabId, message) {
-        calls.messages.push({tabId, message});
-        return {ok: true};
       },
     },
     ...overrides,
@@ -47,6 +49,8 @@ function loadBackground(overrides = {}) {
     setTimeout,
   };
   vm.createContext(context);
+  const chatgptSource = fs.readFileSync(path.resolve("youtube-extension/chatgpt.js"), "utf8");
+  vm.runInContext(chatgptSource, context);
   const source = fs.readFileSync(path.resolve("youtube-extension/background.js"), "utf8");
   vm.runInContext(source, context);
   return {calls, context, listeners};
@@ -74,9 +78,10 @@ test("background opens ChatGPT and sends the attachment with the summary prompt"
   assert.equal(calls.createdTabs.length, 1);
   assert.equal(calls.createdTabs[0].url, "https://chatgpt.com/");
   assert.equal(calls.createdTabs[0].active, true);
-  assert.equal(calls.messages.length, 1);
-  assert.equal(calls.messages[0].tabId, 42);
-  assert.equal(calls.messages[0].message.type, "submit-txt-summary");
-  assert.equal(calls.messages[0].message.prompt, "סכם את הסרטון");
-  assert.equal(calls.messages[0].message.fileName, "transcript.txt");
+  assert.equal(calls.injections.length, 1);
+  assert.equal(calls.injections[0].target.tabId, 42);
+  assert.equal(calls.injections[0].world, "MAIN");
+  assert.equal(calls.injections[0].func.name, "submitTranscriptInChatGPTPage");
+  assert.equal(calls.injections[0].args[0].prompt, "סכם את הסרטון");
+  assert.equal(calls.injections[0].args[0].fileName, "transcript.txt");
 });
