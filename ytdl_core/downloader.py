@@ -4,6 +4,7 @@ import time
 from pathlib import Path
 
 import yt_dlp
+from yt_dlp.utils import DownloadError
 
 from .captions import get_best_subs_config, has_subtitles_enabled
 from .formats import sanitize_filename
@@ -16,6 +17,56 @@ MP4_AUTO_FORMAT = (
     "bv[ext=mp4]+ba[acodec^=mp4a]/"
     "b[ext=mp4]/best[ext=mp4]/best"
 )
+
+SUBTITLE_DOWNLOAD_ERROR_MARKERS = (
+    "unable to download video subtitles",
+    "unable to download subtitles",
+)
+
+
+def is_subtitle_download_error(error: Exception) -> bool:
+    message = str(error).lower()
+    return any(marker in message for marker in SUBTITLE_DOWNLOAD_ERROR_MARKERS)
+
+
+def options_without_subtitles(ydl_opts: dict) -> dict:
+    fallback_opts = ydl_opts.copy()
+    fallback_opts["writesubtitles"] = False
+    fallback_opts["writeautomaticsub"] = False
+    fallback_opts.pop("subtitleslangs", None)
+    fallback_opts.pop("subtitlesformat", None)
+    fallback_opts["postprocessors"] = [
+        processor.copy()
+        for processor in ydl_opts.get("postprocessors", [])
+        if processor.get("key") != "FFmpegSubtitlesConvertor"
+    ]
+    return fallback_opts
+
+
+def run_download_allowing_optional_subtitle_failure(
+    ydl_opts: dict,
+    url: str,
+    subtitle_required: bool,
+) -> bool:
+    subtitles_requested = bool(
+        ydl_opts.get("writesubtitles") or ydl_opts.get("writeautomaticsub")
+    )
+    try:
+        run_download_with_fallback(ydl_opts, url)
+    except DownloadError as error:
+        if (
+            subtitle_required
+            or not subtitles_requested
+            or not is_subtitle_download_error(error)
+        ):
+            raise
+
+        print(f"⚠️ Subtitle download failed: {error}")
+        print("⬇️ Retrying the media download without subtitles...")
+        run_download_with_fallback(options_without_subtitles(ydl_opts), url)
+        return False
+
+    return subtitles_requested
 
 
 def format_has_audio(fmt: dict) -> bool:
@@ -320,11 +371,15 @@ def process_video(i, entry, is_playlist, cookie_arg, target_dir, av_choice, pref
                 "merge_output_format": "mp4",
             })
         
-        run_download_with_fallback(ydl_opts, vid_url)
+        subtitles_downloaded = run_download_allowing_optional_subtitle_failure(
+            ydl_opts,
+            vid_url,
+            subtitle_required=subtitle_only,
+        )
         
         # 4. FIX SUBTITLES AND CLEAN INTERMEDIATE FILES
         subtitle_output_path = None
-        if has_subtitles_enabled(subs_config):
+        if subtitles_downloaded:
             srt_path = auto_fix_subtitles(target_dir, base_clean_name)
             if av_choice == "3" and srt_path:
                 subtitle_output_path = srt_path

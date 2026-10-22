@@ -10,6 +10,7 @@ or that is available under a license that allows downloading.
 
 - Download MP4 video, with optional subtitles.
 - Download MP3 audio, with optional subtitles.
+- If optional subtitles fail to download, MP4/MP3 automatically retry without subtitles.
 - Download fixed SRT subtitles.
 - Download TXT transcripts as continuous text.
 - Download playlist TXT transcripts as a ZIP with individual TXT files and a
