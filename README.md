@@ -15,6 +15,8 @@ or that is available under a license that allows downloading.
 - Download TXT transcripts as continuous text.
 - Prefer YouTube's explicit original automatic-caption tracks (such as
   `en-orig`) over rate-limited auto-translated tracks.
+- Exclude live chat from transcript selection; TXT/SRT jobs report when no
+  speech subtitles are available.
 - Download playlist TXT transcripts as a ZIP with individual TXT files and a
   combined transcript file.
 - Choose video quality from the same cleaned quality list used by the CLI.

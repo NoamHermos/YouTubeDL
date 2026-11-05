@@ -332,6 +332,8 @@ def process_video(i, entry, is_playlist, cookie_arg, target_dir, av_choice, pref
         subs_config = get_best_subs_config(full_info, want_subs)
         if subtitle_only and not has_subtitles_enabled(subs_config):
             vid_stat["status"] = "❌ No subtitles"
+            vid_stat["error"] = "No speech subtitles available for this video"
+            print(f"❌ {vid_stat['error']}. TXT/SRT requires speech subtitles.")
             return vid_stat
         
         tracker = DownloadTracker()

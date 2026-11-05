@@ -2,7 +2,7 @@ from urllib.parse import parse_qs, urlparse
 
 
 def is_hebrew_lang(lang: str) -> bool:
-    return lang.startswith("he") or lang == "iw"
+    return lang.split("-", 1)[0] in {"he", "iw"}
 
 
 def is_english_lang(lang: str) -> bool:
@@ -77,17 +77,27 @@ def has_subtitles_enabled(subs_config: dict) -> bool:
     return bool(subs_config.get("writesubtitles") or subs_config.get("writeautomaticsub"))
 
 
+def speech_caption_map(caption_map: dict) -> dict:
+    # yt-dlp exposes YouTube live chat in the subtitles map, but its JSON
+    # contains viewer messages rather than a transcript of the video's speech.
+    return {
+        lang: formats
+        for lang, formats in caption_map.items()
+        if lang != "live_chat" and formats
+    }
+
+
 def get_best_subs_config(info: dict, want_subs: bool = True) -> dict:
     if not want_subs:
         return {"writesubtitles": False, "writeautomaticsub": False}
 
-    subs = info.get("subtitles") or {}
-    auto_subs = info.get("automatic_captions") or {}
+    subs = speech_caption_map(info.get("subtitles") or {})
+    auto_subs = speech_caption_map(info.get("automatic_captions") or {})
     original_auto_subs = original_auto_caption_map(auto_subs)
     translated_auto_langs = set(auto_subs.keys()) - set(original_auto_subs.keys())
     
     if not subs and not original_auto_subs:
-        print("   (No subtitles found)")
+        print("   (No speech subtitles available; live chat is not a transcript)")
         return {"writesubtitles": False, "writeautomaticsub": False}
 
     selected_lang = None

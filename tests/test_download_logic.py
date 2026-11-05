@@ -1,5 +1,6 @@
 import unittest
 from pathlib import Path
+from tempfile import TemporaryDirectory
 from types import SimpleNamespace
 from unittest.mock import patch
 
@@ -10,6 +11,7 @@ from ytdl_core.downloader import (
     build_video_format_selector,
     ensure_mp4_working_space,
     estimate_mp4_working_bytes,
+    process_video,
     run_download_allowing_optional_subtitle_failure,
 )
 
@@ -155,6 +157,60 @@ class OptionalSubtitleFallbackTests(unittest.TestCase):
             self.options,
             "https://example.invalid/video",
         )
+
+
+class TranscriptProcessingTests(unittest.TestCase):
+    @patch("ytdl_core.downloader.run_download_with_fallback")
+    @patch("ytdl_core.downloader.yt_dlp.YoutubeDL")
+    def test_live_chat_with_original_hebrew_produces_transcript(self, youtube_dl, download):
+        youtube_dl.return_value.__enter__.return_value.extract_info.return_value = {
+            "subtitles": {"live_chat": [{"ext": "json"}]},
+            "automatic_captions": {
+                "iw-orig": [{"url": "https://example.invalid/original"}],
+                "en": [{"url": "https://example.invalid/captions?tlang=en"}],
+            },
+        }
+
+        def write_sample_subtitle(options, _url):
+            self.assertEqual(options["subtitleslangs"], ["iw-orig"])
+            self.assertTrue(options["skip_download"])
+            self.assertTrue(options["writeautomaticsub"])
+            srt_path = Path(options["outtmpl"].replace("%(ext)s", "iw-orig.srt"))
+            srt_path.write_text(
+                "1\n00:00:00,000 --> 00:00:03,000\nשלום עולם\n\n",
+                encoding="utf-8",
+            )
+
+        download.side_effect = write_sample_subtitle
+        with TemporaryDirectory() as directory, patch("builtins.print"):
+            result = process_video(
+                0, {"title": "Hebrew video", "url": "https://example.invalid/video"},
+                False, None, Path(directory), "4", "best", True,
+            )
+            self.assertEqual(result["status"], "✅ Success")
+            transcripts = list(Path(directory).glob("*.txt"))
+            self.assertEqual(len(transcripts), 1)
+            self.assertEqual(transcripts[0].read_text(encoding="utf-8"), "שלום עולם\n")
+        download.assert_called_once()
+
+    @patch("ytdl_core.downloader.run_download_with_fallback")
+    @patch("ytdl_core.downloader.yt_dlp.YoutubeDL")
+    def test_chat_only_subtitle_jobs_stop_before_downloading(self, youtube_dl, download):
+        youtube_dl.return_value.__enter__.return_value.extract_info.return_value = {
+            "subtitles": {"live_chat": [{"ext": "json"}]},
+        }
+
+        for mode in ("3", "4"):
+            with self.subTest(mode=mode), TemporaryDirectory() as directory, patch("builtins.print"):
+                result = process_video(
+                    0, {"title": "Chat only", "url": "https://example.invalid/video"},
+                    False, None, Path(directory), mode, "best", True,
+                )
+                self.assertEqual(result["status"], "❌ No subtitles")
+                self.assertIn("No speech subtitles", result["error"])
+                self.assertEqual(list(Path(directory).iterdir()), [])
+
+        download.assert_not_called()
 
 
 if __name__ == "__main__":
