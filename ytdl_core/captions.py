@@ -26,8 +26,36 @@ def has_original_caption_format(formats: list) -> bool:
     return any(not is_translated_caption_format(fmt) for fmt in formats)
 
 
+def is_original_language_code(lang: str) -> bool:
+    return lang.endswith("-orig")
+
+
+def original_auto_caption_map(caption_map: dict) -> dict:
+    original_base_codes = {
+        lang.removesuffix("-orig")
+        for lang in caption_map
+        if is_original_language_code(lang)
+    }
+    return {
+        lang: formats
+        for lang, formats in caption_map.items()
+        if is_original_language_code(lang)
+        or (
+            lang not in original_base_codes
+            and has_original_caption_format(formats or [])
+        )
+    }
+
+
 def choose_lang_from_map(caption_map: dict, predicate, original_only: bool = False):
-    for lang in sorted(caption_map.keys()):
+    # YouTube now commonly exposes an original automatic-caption track as
+    # ``en-orig`` alongside ``en``, where the latter is an auto-translation.
+    # Prefer the explicit original code even though it sorts after the base code.
+    language_order = sorted(
+        caption_map.keys(),
+        key=lambda lang: (not is_original_language_code(lang), lang),
+    )
+    for lang in language_order:
         if predicate(lang) and (not original_only or has_original_caption_format(caption_map.get(lang) or [])):
             return lang
     return None
@@ -55,11 +83,7 @@ def get_best_subs_config(info: dict, want_subs: bool = True) -> dict:
 
     subs = info.get("subtitles") or {}
     auto_subs = info.get("automatic_captions") or {}
-    original_auto_subs = {
-        lang: formats
-        for lang, formats in auto_subs.items()
-        if has_original_caption_format(formats or [])
-    }
+    original_auto_subs = original_auto_caption_map(auto_subs)
     translated_auto_langs = set(auto_subs.keys()) - set(original_auto_subs.keys())
     
     if not subs and not original_auto_subs:

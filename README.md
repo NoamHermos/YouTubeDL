@@ -13,6 +13,8 @@ or that is available under a license that allows downloading.
 - If optional subtitles fail to download, MP4/MP3 automatically retry without subtitles.
 - Download fixed SRT subtitles.
 - Download TXT transcripts as continuous text.
+- Prefer YouTube's explicit original automatic-caption tracks (such as
+  `en-orig`) over rate-limited auto-translated tracks.
 - Download playlist TXT transcripts as a ZIP with individual TXT files and a
   combined transcript file.
 - Choose video quality from the same cleaned quality list used by the CLI.
