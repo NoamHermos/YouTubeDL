@@ -7,6 +7,7 @@ from pathlib import Path
 import yt_dlp
 
 import ytdl
+from ytdl_core.transcript_cache import write_cached_transcript
 
 MAX_PLAYLIST_RETRIES = 2
 
@@ -236,6 +237,10 @@ def create_combined_playlist_txt(target_dir: Path, title: str, indexed_entries: 
 
 
 def run_job(args: argparse.Namespace) -> int:
+    if args.source == "single" and args.download_type == "txt":
+        if write_cached_transcript(args.url.strip(), Path(args.downloads_dir)):
+            return 0
+
     cookie_file = Path(args.cookie_file)
     cookie_arg = str(cookie_file) if cookie_file.is_file() else None
     if cookie_arg:

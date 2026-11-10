@@ -18,6 +18,10 @@ RUN apt-get update \
 COPY requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt
 
+# yt-dlp's bundled EJS scripts require a JavaScript runtime for YouTube.
+COPY --from=denoland/deno:bin-2.9.8 /deno /usr/local/bin/deno
+RUN deno --version
+
 COPY ytdl.py web_app.py web_worker.py ./
 COPY youtube_downloader_web ./youtube_downloader_web
 COPY ytdl_core ./ytdl_core

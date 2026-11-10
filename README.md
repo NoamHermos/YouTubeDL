@@ -35,6 +35,10 @@ python -m pip install -r requirements.txt
 python web_app.py
 ```
 
+For full YouTube support, install Deno 2.3 or newer and keep it on `PATH`.
+`yt-dlp[default,curl-cffi]` supplies the EJS scripts and browser impersonation
+support; Deno runs the JavaScript challenges. The Docker image includes Deno.
+
 Open:
 
 ```text
@@ -142,6 +146,30 @@ The server requires the `X-YouTube-Downloader` request marker used by the
 bundled web UI and extension for state-changing API calls. The custom header
 helps block drive-by requests made by unrelated web pages; it is not identity
 verification or a replacement for authentication outside a trusted LAN.
+
+## YouTube bot checks and browser transcript fallback
+
+The Docker image includes Deno to run yt-dlp's EJS challenges. Browser
+impersonation, a supported JavaScript runtime, and a current yt-dlp release do
+not guarantee that YouTube will accept anonymous requests from the server.
+An HTTP 429 followed by "Sign in to confirm you're not a bot" may require a
+browser session even when captions are available in the browser.
+
+For a video whose transcript can be exported from the browser, import that
+UTF-8 export into the NAS transcript cache without transferring cookies:
+
+```bash
+python -m ytdl_core.transcript_cache browser-transcript.txt --title "Video title"
+```
+
+The importer accepts the browser export headed `YouTube transcript`, with
+`Video ID`, `Language`, and timestamped caption lines. It keeps the video's
+identity, language, import time, and source and produces continuous TXT text.
+Subsequent single-video TXT jobs for that exact video use the cached transcript
+before contacting YouTube, including jobs from the extension. Logs explicitly
+identify the browser-exported source. Other videos and MP4/MP3/SRT jobs keep
+their normal yt-dlp flow. The cache lives under `DOWNLOADS_DIR/.transcript-cache`
+and follows the normal download retention policy.
 
 ## Cookies
 
